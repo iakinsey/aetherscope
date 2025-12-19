@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 
-use async_trait::async_trait;
-use chromiumoxide::{Browser, BrowserConfig, Handler, browser, handler::http};
-
 use crate::{
     types::{error::AppError, structs::record::Record, traits::task::Task},
     utils::fs::download_browser,
 };
+use async_trait::async_trait;
+use chromiumoxide::{Browser, BrowserConfig, Handler, browser, handler::http};
+use futures::StreamExt;
+use tokio::{spawn, task::JoinHandle};
 
 pub struct HeadlessBrowserConfig {
     http_proxy: Option<String>,
@@ -15,7 +16,7 @@ pub struct HeadlessBrowserConfig {
 
 pub struct HeadlessBrowserFetcher {
     browser: Browser,
-    handler: Handler,
+    _handle: JoinHandle<()>,
 }
 
 impl HeadlessBrowserFetcher {
@@ -33,9 +34,17 @@ impl HeadlessBrowserFetcher {
             browser_config = browser_config.arg(format!("--proxy-server={}", http_proxy))
         }
 
-        let (browser, handler) = Browser::launch(browser_config.build()?).await?;
+        let (browser, mut handler) = Browser::launch(browser_config.build()?).await?;
 
-        Ok(Self { browser, handler })
+        let _handle = spawn(async move {
+            while let Some(h) = handler.next().await {
+                if h.is_err() {
+                    break;
+                }
+            }
+        });
+
+        Ok(Self { browser, _handle })
     }
 }
 
