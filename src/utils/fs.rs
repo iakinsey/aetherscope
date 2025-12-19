@@ -1,7 +1,4 @@
-use std::{
-    env::temp_dir,
-    path::{Path, PathBuf},
-};
+use std::{env::temp_dir, path::PathBuf};
 
 use chromiumoxide::{BrowserFetcher, BrowserFetcherOptions};
 use tokio::fs::create_dir_all;
@@ -10,7 +7,7 @@ use crate::types::error::AppError;
 
 pub async fn download_browser(path: Option<&PathBuf>) -> Result<PathBuf, AppError> {
     let path = match path {
-        Some(p) => p,
+        Some(p) => p.clone(),
         None => {
             let mut p = get_temp_root();
             p.push("browser");
@@ -19,7 +16,7 @@ pub async fn download_browser(path: Option<&PathBuf>) -> Result<PathBuf, AppErro
         }
     };
 
-    create_dir_all(path).await?;
+    create_dir_all(&path).await?;
 
     let fetcher = BrowserFetcher::new(BrowserFetcherOptions::builder().with_path(path).build()?);
     let info = fetcher.fetch().await?;

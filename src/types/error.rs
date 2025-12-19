@@ -8,6 +8,8 @@ pub enum AppError {
     CdpError(#[from] chromiumoxide::error::CdpError),
     #[error(transparent)]
     BrowserFetcherError(#[from] chromiumoxide::fetcher::FetcherError),
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
 }
 
 impl From<String> for AppError {
