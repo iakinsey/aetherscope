@@ -1,11 +1,12 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     types::{error::AppError, structs::record::Record, traits::task::Task},
-    utils::fs::download_browser,
+    utils::{fs::download_browser, sync::TabPool},
 };
 use async_trait::async_trait;
-use chromiumoxide::{Browser, BrowserConfig, Handler, browser, handler::http};
+use chromiumoxide::{Browser, BrowserConfig, Handler, Page, browser, handler::http};
+use fastpool::bounded::{Pool, PoolConfig};
 use futures::StreamExt;
 use tokio::{spawn, task::JoinHandle};
 
@@ -15,8 +16,9 @@ pub struct HeadlessBrowserConfig {
 }
 
 pub struct HeadlessBrowserFetcher {
-    browser: Browser,
+    browser: Arc<Browser>,
     _handle: JoinHandle<()>,
+    pool: Arc<Pool<TabPool>>,
 }
 
 impl HeadlessBrowserFetcher {
@@ -35,6 +37,7 @@ impl HeadlessBrowserFetcher {
         }
 
         let (browser, mut handler) = Browser::launch(browser_config.build()?).await?;
+        let browser = Arc::new(browser);
 
         let _handle = spawn(async move {
             while let Some(h) = handler.next().await {
@@ -44,13 +47,20 @@ impl HeadlessBrowserFetcher {
             }
         });
 
-        Ok(Self { browser, _handle })
+        let pool = Pool::new(PoolConfig::new(16), TabPool::new(Arc::clone(&browser)));
+
+        Ok(Self {
+            browser,
+            _handle,
+            pool,
+        })
     }
 }
 
 #[async_trait]
 impl Task for HeadlessBrowserFetcher {
     async fn on_message(&self, message: Record) -> Result<Record, AppError> {
-        unimplemented!()
+        let page = self.pool.get().await?;
+        unimplemented!();
     }
 }
