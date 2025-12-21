@@ -8,5 +8,6 @@ async-trait = "0.1.89"
 chromiumoxide = { version = "0.8.0", features = ["_fetcher-rustls-tokio"] }
 fastpool = "1.0.2"
 futures = "0.3.31"
+serde_json = "1.0.145"
 thiserror = "2.0.17"
 tokio = "1.48.0"

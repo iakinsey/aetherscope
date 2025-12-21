@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use chromiumoxide::Browser;
 use chromiumoxide::Page;
+use chromiumoxide::cdp::browser_protocol::network::EnableParams;
 use fastpool::ManageObject;
 use fastpool::ObjectStatus;
 
@@ -9,11 +10,15 @@ use crate::types::error::AppError;
 
 pub struct TabPool {
     browser: Arc<Browser>,
+    enable_network_events: bool,
 }
 
 impl TabPool {
-    pub fn new(browser: Arc<Browser>) -> Self {
-        Self { browser }
+    pub fn new(browser: Arc<Browser>, enable_network_events: bool) -> Self {
+        Self {
+            browser,
+            enable_network_events,
+        }
     }
 }
 
@@ -22,7 +27,13 @@ impl ManageObject for TabPool {
     type Error = AppError;
 
     async fn create(&self) -> Result<Self::Object, Self::Error> {
-        Ok(self.browser.new_page("about:blank").await?)
+        let tab = self.browser.new_page("about:blank").await?;
+
+        if self.enable_network_events {
+            tab.execute(EnableParams::default()).await?;
+        }
+
+        Ok(tab)
     }
 
     async fn is_recyclable(

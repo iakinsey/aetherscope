@@ -16,6 +16,7 @@ dependencies = [
  "chromiumoxide",
  "fastpool",
  "futures",
+ "serde_json",
  "thiserror 2.0.17",
  "tokio",
 ]
