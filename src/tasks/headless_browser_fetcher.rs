@@ -1,24 +1,16 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
-    types::{
-        error::AppError,
-        structs::record::{Record, RecordMetadata},
-        traits::task::Task,
-    },
+    types::{error::AppError, structs::record::Record, traits::task::Task},
     utils::{fs::download_browser, sync::TabPool},
 };
 use async_trait::async_trait;
-use chromiumoxide::cdp::browser_protocol::network::RequestId;
-use chromiumoxide::{Browser, BrowserConfig, Handler, Page, browser, handler::http};
+use base64::{Engine as _, engine::general_purpose};
+use chromiumoxide::cdp::browser_protocol::network;
+use chromiumoxide::{Browser, BrowserConfig, Page};
 use fastpool::bounded::{Pool, PoolConfig};
 use futures::StreamExt;
-use serde_json::Value;
-use tokio::{
-    spawn,
-    sync::{Mutex, oneshot::Receiver},
-    task::JoinHandle,
-};
+use tokio::{spawn, task::JoinHandle};
 
 pub struct HeadlessBrowserConfig {
     http_proxy: Option<String>,
@@ -27,22 +19,17 @@ pub struct HeadlessBrowserConfig {
 }
 
 #[derive(Debug, Clone)]
-struct ReqInfo {
+struct HttpRequest {
     method: String,
-    req_headers: serde_json::Value,
-    t0: f64,
+    req_headers: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
-struct RespInfo {
+struct HttpResponse {
     status: i64,
-    resp_headers: Value,
-}
-
-struct HttpMetricsRx {
-    req_map: Arc<Mutex<HashMap<RequestId, ReqInfo>>>,
-    resp_map: Arc<Mutex<HashMap<RequestId, RespInfo>>>,
-    done_rx: Receiver<(RequestId, f64)>,
+    request: HttpRequest,
+    resp_headers: HashMap<String, String>,
+    text: Option<String>,
 }
 
 pub struct HeadlessBrowserFetcher<'a> {
@@ -91,9 +78,128 @@ impl<'a> HeadlessBrowserFetcher<'a> {
         })
     }
 
-    async fn install_http_metrics(&self, page: &Page) -> Result<HttpMetricsRx, AppError> {
-        unimplemented!();
+    pub async fn fetch_http_response(
+        page: &Page,
+        url: String,
+        capture_headers: bool,
+    ) -> Result<HttpResponse, AppError> {
+        page.execute(network::EnableParams::default()).await?;
+
+        let mut req_s = page
+            .event_listener::<network::EventRequestWillBeSent>()
+            .await?;
+        let mut resp_s = page
+            .event_listener::<network::EventResponseReceived>()
+            .await?;
+        let mut fin_s = page
+            .event_listener::<network::EventLoadingFinished>()
+            .await?;
+
+        page.goto(url).await?;
+
+        let mut doc_rid: Option<network::RequestId> = None;
+
+        let mut method: Option<String> = None;
+        let mut req_headers_raw: Option<network::Headers> = None;
+
+        let mut status: Option<i64> = None;
+        let mut resp_headers_raw: Option<network::Headers> = None;
+
+        loop {
+            tokio::select! {
+                Some(ev) = req_s.next() => {
+                    if ev.r#type != Some(network::ResourceType::Document) {
+                        continue;
+                    }
+
+                    doc_rid = Some(ev.request_id.clone());
+                    method = Some(ev.request.method.clone());
+
+                    if !capture_headers {
+                        req_headers_raw = Some(ev.request.headers.clone());
+                    }
+                }
+
+                Some(ev) = resp_s.next() => {
+                    if ev.r#type != network::ResourceType::Document {
+                        continue;
+                    }
+
+                    doc_rid = Some(ev.request_id.clone());
+                    status = Some(ev.response.status as i64);
+
+                    if !capture_headers {
+                        resp_headers_raw = Some(ev.response.headers.clone());
+                    }
+                }
+
+                Some(ev) = fin_s.next() => {
+                    let Some(rid) = doc_rid.as_ref() else { continue; };
+                    if &ev.request_id != rid { continue; }
+
+                    let Some(method) = method.clone() else { continue; };
+                    let Some(status) = status else { continue; };
+
+                    let rid = rid.clone();
+                    let body = page
+                        .execute(network::GetResponseBodyParams { request_id: rid })
+                        .await?;
+
+                    let body_str = &body.body;
+
+                    let bytes: Vec<u8> = if body.base64_encoded {
+                        general_purpose::STANDARD.decode(body_str.as_bytes())?
+                    } else {
+                        body_str.as_bytes().to_vec()
+                    };
+
+                    let text = String::from_utf8(bytes).ok();
+
+                    let (req_headers, resp_headers) = if capture_headers {
+                        (HashMap::new(), HashMap::new())
+                    } else {
+                        (
+                            headers_to_string_map(req_headers_raw.as_ref()),
+                            headers_to_string_map(resp_headers_raw.as_ref()),
+                        )
+                    };
+
+                    return Ok(HttpResponse {
+                        status,
+                        request: HttpRequest {
+                            method,
+                            req_headers,
+                        },
+                        resp_headers,
+                        text,
+                    });
+                }
+            }
+        }
     }
+}
+
+fn headers_to_string_map(h: Option<&network::Headers>) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    let Some(h) = h else {
+        return out;
+    };
+
+    let v = serde_json::to_value(h).unwrap_or(serde_json::Value::Null);
+    let Some(obj) = v.as_object() else {
+        return out;
+    };
+
+    for (k, vv) in obj {
+        let s = match vv {
+            serde_json::Value::String(s) => s.clone(),
+            serde_json::Value::Null => String::new(),
+            _ => vv.to_string(),
+        };
+        out.insert(k.clone(), s);
+    }
+
+    out
 }
 
 #[async_trait]
@@ -102,8 +208,6 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
         let tab = self.pool.get().await?;
         let page = tab.goto(message.uri).await?;
         let html = page.wait_for_navigation().await?.content().await?;
-        let mut metadata = vec![];
-        let metrics = self.install_http_metrics(page).await?;
 
         unimplemented!()
     }

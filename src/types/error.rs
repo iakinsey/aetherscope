@@ -4,12 +4,16 @@ use thiserror::Error;
 pub enum AppError {
     #[error("{0}")]
     Generic(String),
+    #[error("{0}")]
+    HeadlessBrowserFetcherError(String),
     #[error(transparent)]
     CdpError(#[from] chromiumoxide::error::CdpError),
     #[error(transparent)]
     BrowserFetcherError(#[from] chromiumoxide::fetcher::FetcherError),
     #[error(transparent)]
     IOError(#[from] std::io::Error),
+    #[error(transparent)]
+    Base64DecodeError(#[from] base64::DecodeError),
 }
 
 impl From<String> for AppError {
