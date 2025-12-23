@@ -13,8 +13,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
-use chromiumoxide::cdp::browser_protocol::network;
 use chromiumoxide::{Browser, BrowserConfig, Page};
+use chromiumoxide::{browser::HeadlessMode, cdp::browser_protocol::network};
 use fastpool::bounded::{Pool, PoolConfig};
 use futures::StreamExt;
 use tokio::{spawn, task::JoinHandle};
@@ -43,7 +43,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
         };
 
         let mut browser_config = BrowserConfig::builder()
-            .with_head()
+            .headless_mode(HeadlessMode::True)
             .chrome_executable(browser_path);
 
         if let Some(http_proxy) = &config.http_proxy {
