@@ -16,6 +16,12 @@ pub enum AppError {
     IOError(#[from] std::io::Error),
     #[error(transparent)]
     Base64DecodeError(#[from] base64::DecodeError),
+    #[error("HTTP {method} {status}: {message}")]
+    Http {
+        status: i64,
+        method: String,
+        message: String,
+    },
 }
 
 impl From<String> for AppError {

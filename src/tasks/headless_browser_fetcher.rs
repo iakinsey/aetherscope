@@ -37,6 +37,7 @@ struct HttpResponse {
     request: HttpRequest,
     resp_headers: HashMap<String, String>,
     key: Option<String>,
+    error: Option<String>,
 }
 
 pub struct HeadlessBrowserFetcher<'a> {
@@ -159,19 +160,34 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                     let rid = rid.clone();
                     let body = page
                         .execute(network::GetResponseBodyParams { request_id: rid })
-                        .await?;
+                        .await
+                        .map_err(|e| AppError::Http {
+                            status: status,
+                            method: method.clone(),
+                            message: e.to_string(),
+                        })?;
 
                     let body_str = &body.body;
 
                     let bytes: Vec<u8> = if body.base64_encoded {
-                        general_purpose::STANDARD.decode(body_str.as_bytes())?
+                        general_purpose::STANDARD
+                            .decode(body_str.as_bytes())
+                            .map_err(|e| AppError::Http {
+                                status: status,
+                                method: method.clone(),
+                                message: e.to_string(),
+                        })?
                     } else {
                         body_str.as_bytes().to_vec()
                     };
 
                     let key = Uuid::new_v4().to_string();
 
-                    object_store.put(&key, bytes.as_slice()).await?;
+                    object_store.put(&key, bytes.as_slice()).await.map_err(|e| AppError::Http {
+                            status: status,
+                            method: method.clone(),
+                            message: e.to_string(),
+                        })?;
 
                     let (req_headers, resp_headers) = if capture_headers {
                         (HashMap::new(), HashMap::new())
@@ -190,6 +206,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                         },
                         resp_headers,
                         key: Some(key),
+                        error: None,
                     });
                 }
             }
