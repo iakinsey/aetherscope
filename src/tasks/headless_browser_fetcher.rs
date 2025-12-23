@@ -1,8 +1,13 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
-    types::{error::AppError, structs::record::Record, traits::task::Task},
-    utils::{fs::download_browser, sync::TabPool},
+    services::object_store,
+    types::{
+        error::AppError,
+        structs::record::Record,
+        traits::{object_store::ObjectStore, task::Task},
+    },
+    utils::{dependencies::dependencies, fs::download_browser, sync::TabPool},
 };
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
@@ -11,11 +16,13 @@ use chromiumoxide::{Browser, BrowserConfig, Page};
 use fastpool::bounded::{Pool, PoolConfig};
 use futures::StreamExt;
 use tokio::{spawn, task::JoinHandle};
+use uuid::Uuid;
 
 pub struct HeadlessBrowserConfig {
     http_proxy: Option<String>,
     browser_path: Option<String>,
     enable_http_metrics: bool,
+    object_store: String,
 }
 
 #[derive(Debug, Clone)]
@@ -29,7 +36,7 @@ struct HttpResponse {
     status: i64,
     request: HttpRequest,
     resp_headers: HashMap<String, String>,
-    text: Option<String>,
+    key: Option<String>,
 }
 
 pub struct HeadlessBrowserFetcher<'a> {
@@ -37,6 +44,7 @@ pub struct HeadlessBrowserFetcher<'a> {
     _handle: JoinHandle<()>,
     pool: Arc<Pool<TabPool>>,
     config: &'a HeadlessBrowserConfig,
+    object_store: Arc<dyn ObjectStore>,
 }
 
 impl<'a> HeadlessBrowserFetcher<'a> {
@@ -70,11 +78,17 @@ impl<'a> HeadlessBrowserFetcher<'a> {
             TabPool::new(Arc::clone(&browser), config.enable_http_metrics),
         );
 
+        let object_store = dependencies()
+            .lock()
+            .await
+            .get_object_store(&config.object_store)?;
+
         Ok(Self {
             browser,
             _handle,
             pool,
             config,
+            object_store,
         })
     }
 
@@ -82,6 +96,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
         page: &Page,
         url: String,
         capture_headers: bool,
+        object_store: Arc<dyn ObjectStore>,
     ) -> Result<HttpResponse, AppError> {
         page.execute(network::EnableParams::default()).await?;
 
@@ -104,6 +119,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
 
         let mut status: Option<i64> = None;
         let mut resp_headers_raw: Option<network::Headers> = None;
+        let object_store = object_store;
 
         loop {
             tokio::select! {
@@ -153,7 +169,9 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                         body_str.as_bytes().to_vec()
                     };
 
-                    let text = String::from_utf8(bytes).ok();
+                    let key = Uuid::new_v4().to_string();
+
+                    object_store.put(&key, bytes.as_slice()).await?;
 
                     let (req_headers, resp_headers) = if capture_headers {
                         (HashMap::new(), HashMap::new())
@@ -171,7 +189,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                             req_headers,
                         },
                         resp_headers,
-                        text,
+                        key: Some(key),
                     });
                 }
             }

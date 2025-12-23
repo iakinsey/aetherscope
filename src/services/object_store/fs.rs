@@ -1,7 +1,7 @@
 use std::{io::ErrorKind, path::PathBuf};
 
 use async_trait::async_trait;
-use tokio::fs::{create_dir_all, read, remove_file, try_exists, write};
+use tokio::fs::{create_dir_all, read, remove_file, write};
 
 use crate::types::{error::AppError, traits::object_store::ObjectStore};
 
@@ -31,9 +31,6 @@ impl ObjectStore for FileSystemObjectStore {
             Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
             Err(e) => Err(e.into()),
         }
-    }
-    async fn exists(&self, key: &str) -> Result<bool, AppError> {
-        Ok(try_exists(self.path.join(key)).await?)
     }
 }
 

@@ -6,6 +6,8 @@ pub enum AppError {
     Generic(String),
     #[error("{0}")]
     HeadlessBrowserFetcherError(String),
+    #[error("Mising dependency: {0}")]
+    MissingDependency(String),
     #[error(transparent)]
     CdpError(#[from] chromiumoxide::error::CdpError),
     #[error(transparent)]
