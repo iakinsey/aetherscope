@@ -1,10 +1,12 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crate::{
-    services::object_store,
     types::{
         error::AppError,
-        structs::record::Record,
+        structs::{
+            metadata::http_response::{HttpRequest, HttpResponse},
+            record::{self, Record, RecordMetadata},
+        },
         traits::{object_store::ObjectStore, task::Task},
     },
     utils::{dependencies::dependencies, fs::download_browser, sync::TabPool},
@@ -23,21 +25,6 @@ pub struct HeadlessBrowserConfig {
     browser_path: Option<String>,
     enable_http_metrics: bool,
     object_store: String,
-}
-
-#[derive(Debug, Clone)]
-struct HttpRequest {
-    method: String,
-    req_headers: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone)]
-struct HttpResponse {
-    status: i64,
-    request: HttpRequest,
-    resp_headers: HashMap<String, String>,
-    key: Option<String>,
-    error: Option<String>,
 }
 
 pub struct HeadlessBrowserFetcher<'a> {
@@ -241,9 +228,39 @@ fn headers_to_string_map(h: Option<&network::Headers>) -> HashMap<String, String
 impl<'a> Task for HeadlessBrowserFetcher<'a> {
     async fn on_message(&self, message: Record) -> Result<Record, AppError> {
         let tab = self.pool.get().await?;
-        let page = tab.goto(message.uri).await?;
-        let html = page.wait_for_navigation().await?.content().await?;
+        let page = tab.goto(message.uri.clone()).await?;
+        let response = match Self::fetch_http_response(
+            page,
+            message.uri.clone(),
+            self.config.enable_http_metrics,
+            self.object_store.clone(),
+        )
+        .await
+        {
+            Ok(resp) => resp,
+            Err(AppError::Http {
+                status,
+                method,
+                message,
+            }) => HttpResponse {
+                status,
+                request: HttpRequest {
+                    method,
+                    req_headers: HashMap::new(),
+                },
+                resp_headers: HashMap::new(),
+                key: None,
+                error: Some(message),
+            },
+            Err(e) => {
+                return Err(e);
+            }
+        };
 
-        unimplemented!()
+        Ok(Record {
+            uri: message.uri,
+            task_id: message.task_id,
+            metadata: vec![RecordMetadata::HttpResponse(response)],
+        })
     }
 }
