@@ -10,15 +10,11 @@ use crate::types::error::AppError;
 
 pub struct TabPool {
     browser: Arc<Browser>,
-    enable_network_events: bool,
 }
 
 impl TabPool {
-    pub fn new(browser: Arc<Browser>, enable_network_events: bool) -> Self {
-        Self {
-            browser,
-            enable_network_events,
-        }
+    pub fn new(browser: Arc<Browser>) -> Self {
+        Self { browser }
     }
 }
 
@@ -29,9 +25,7 @@ impl ManageObject for TabPool {
     async fn create(&self) -> Result<Self::Object, Self::Error> {
         let tab = self.browser.new_page("about:blank").await?;
 
-        if self.enable_network_events {
-            tab.execute(EnableParams::default()).await?;
-        }
+        tab.execute(EnableParams::default()).await?;
 
         Ok(tab)
     }
