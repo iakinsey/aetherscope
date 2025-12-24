@@ -15,7 +15,7 @@ use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
 use chromiumoxide::{Browser, BrowserConfig, Page};
 use chromiumoxide::{browser::HeadlessMode, cdp::browser_protocol::network};
-use fastpool::bounded::{Pool, PoolConfig};
+use fastpool::bounded::{Object, Pool, PoolConfig};
 use futures::StreamExt;
 use tokio::{
     spawn,
@@ -82,7 +82,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
     }
 
     pub async fn fetch_http_response(
-        page: &Page,
+        page: Object<TabPool>,
         url: String,
         object_store: Arc<dyn ObjectStore>,
         idle_timeout: Duration,
@@ -182,9 +182,8 @@ pub fn headers_to_hashmap(headers: Option<network::Headers>) -> HashMap<String, 
 impl<'a> Task for HeadlessBrowserFetcher<'a> {
     async fn on_message(&self, message: Record) -> Result<Record, AppError> {
         let tab = self.pool.get().await?;
-        let page = tab.goto(message.uri.clone()).await?;
         let response = match Self::fetch_http_response(
-            page,
+            tab,
             message.uri.clone(),
             self.object_store.clone(),
             Duration::from_secs(self.config.idle_timeout as u64),
