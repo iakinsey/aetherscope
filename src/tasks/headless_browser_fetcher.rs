@@ -266,6 +266,12 @@ mod tests {
             _ => panic!("headless browser did not create a response object"),
         };
 
+        assert_eq!(http_response.status, Some(200));
+        assert_eq!(http_response.request.method, "GET");
+        assert_eq!(http_response.error, None);
+        assert!(http_response.response_headers.len() > 1);
+        assert!(http_response.request.request_headers.len() > 1);
+
         let key = http_response.key.clone().unwrap();
 
         let object_store = dependencies()
