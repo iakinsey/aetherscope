@@ -99,6 +99,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
         let mut response_headers: Option<network::Headers> = None;
         let mut last_event = Instant::now();
         let mut status: Option<i64> = None;
+        let mut body: Option<Vec<u8>> = None;
         let method = "GET";
 
         loop {
@@ -107,11 +108,24 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                     break;
                 }
                 Some(e) = reqs.next() => {
+                    last_event = Instant::now();
                     request_headers = Some(e.request.headers.clone());
                 }
                 Some(e) = resps.next() => {
+                    last_event = Instant::now();
                     status = Some(e.response.status);
                     response_headers = Some(e.response.headers.clone());
+
+                    let request_id = e.request_id.clone();
+                    let resp = page
+                        .execute(network::GetResponseBodyParams { request_id })
+                        .await?;
+
+                    body = Some(if resp.base64_encoded {
+                        general_purpose::STANDARD.decode(&resp.body)?
+                    } else {
+                        resp.body.clone().into_bytes()
+                    });
                 }
                 _ = sleep_until(last_event + idle_timeout) => {
                     break;
@@ -119,28 +133,46 @@ impl<'a> HeadlessBrowserFetcher<'a> {
             }
         }
 
-        unimplemented!();
+        let request_headers = headers_to_hashmap(request_headers);
+        let response_headers = headers_to_hashmap(response_headers);
+        let mut key: Option<String> = None;
+
+        if let Some(body) = body {
+            let storage_key = Uuid::new_v4().to_string();
+            object_store.put(&storage_key, &body).await?;
+            key = Some(storage_key)
+        }
+
+        Ok(HttpResponse {
+            request: HttpRequest {
+                method: method.to_string(),
+                request_headers,
+            },
+            response_headers,
+            status,
+            key,
+            error: None,
+        })
     }
 }
 
-fn headers_to_string_map(h: Option<&network::Headers>) -> HashMap<String, String> {
+pub fn headers_to_hashmap(headers: Option<network::Headers>) -> HashMap<String, String> {
     let mut out = HashMap::new();
-    let Some(h) = h else {
+
+    let Some(h) = headers else {
         return out;
     };
 
-    let v = serde_json::to_value(h).unwrap_or(serde_json::Value::Null);
-    let Some(obj) = v.as_object() else {
+    let Some(obj) = h.inner().as_object() else {
         return out;
     };
 
-    for (k, vv) in obj {
-        let s = match vv {
-            serde_json::Value::String(s) => s.clone(),
-            serde_json::Value::Null => String::new(),
-            _ => vv.to_string(),
-        };
-        out.insert(k.clone(), s);
+    for (k, v) in obj {
+        let val = v
+            .as_str()
+            .map(str::to_owned)
+            .unwrap_or_else(|| v.to_string());
+        out.insert(k.clone(), val);
     }
 
     out
@@ -160,23 +192,16 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
         .await
         {
             Ok(resp) => resp,
-            Err(AppError::Http {
-                status,
-                method,
-                message,
-            }) => HttpResponse {
-                status,
+            Err(e) => HttpResponse {
+                status: None,
                 request: HttpRequest {
-                    method,
-                    req_headers: HashMap::new(),
+                    method: "GET".to_string(),
+                    request_headers: HashMap::new(),
                 },
-                resp_headers: HashMap::new(),
+                response_headers: HashMap::new(),
                 key: None,
-                error: Some(message),
+                error: Some(e.to_string()),
             },
-            Err(e) => {
-                return Err(e);
-            }
         };
 
         Ok(Record {
