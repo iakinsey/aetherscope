@@ -2,6 +2,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
     types::{
+        configs::headless_browser::HeadlessBrowserConfig,
         error::AppError,
         structs::{
             metadata::http_response::{HttpRequest, HttpResponse},
@@ -24,17 +25,10 @@ use tokio::{
 };
 use uuid::Uuid;
 
-pub struct HeadlessBrowserConfig {
-    http_proxy: Option<String>,
-    browser_path: Option<String>,
-    object_store: String,
-    idle_timeout: i32,
-}
-
 pub struct HeadlessBrowserFetcher<'a> {
     browser: Arc<Browser>,
     _handle: JoinHandle<()>,
-    pool: Arc<Pool<TabPool>>,
+    pool: Arc<Pool<TabPool<'a>>>,
     config: &'a HeadlessBrowserConfig,
     object_store: Arc<dyn ObjectStore>,
 }
@@ -65,7 +59,10 @@ impl<'a> HeadlessBrowserFetcher<'a> {
             }
         });
 
-        let pool = Pool::new(PoolConfig::new(16), TabPool::new(Arc::clone(&browser)));
+        let pool = Pool::new(
+            PoolConfig::new(16),
+            TabPool::new(Arc::clone(&browser), config),
+        );
 
         let object_store = dependencies()
             .lock()
@@ -82,7 +79,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
     }
 
     pub async fn fetch_http_response(
-        page: Object<TabPool>,
+        page: Object<TabPool<'a>>,
         url: String,
         object_store: Arc<dyn ObjectStore>,
         idle_timeout: Duration,
@@ -236,6 +233,7 @@ mod tests {
             .unwrap();
 
         let config = HeadlessBrowserConfig {
+            user_agent: None,
             http_proxy: None,
             browser_path: None,
             object_store: store_name.to_string(),
@@ -243,7 +241,6 @@ mod tests {
         };
 
         let fetcher = HeadlessBrowserFetcher::new(&config).await.unwrap();
-
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET).path("/");
