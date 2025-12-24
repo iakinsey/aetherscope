@@ -243,7 +243,9 @@ mod tests {
         let fetcher = HeadlessBrowserFetcher::new(&config).await.unwrap();
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
-            when.method(GET).path("/");
+            when.method(GET)
+                .path("/")
+                .header("user-agent", config.get_user_agent());
 
             then.status(200).body(test_response);
         });
@@ -284,18 +286,70 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_request_success_no_metrics() {
-        unimplemented!();
-    }
-
-    #[tokio::test]
-    async fn test_request_success_http_proxy() {
-        unimplemented!();
-    }
-
-    #[tokio::test]
     async fn test_request_bad_response() {
-        unimplemented!();
+        let path = temp_dir().join(Uuid::new_v4().to_string());
+        let store = FileSystemObjectStore::new(path).await.unwrap();
+        let store_name = "test-object-store";
+        let task_id = Uuid::new_v4().to_string();
+        let test_response = "There was an error.";
+
+        dependencies()
+            .lock()
+            .await
+            .set_object_store(store_name, Arc::new(store))
+            .unwrap();
+
+        let config = HeadlessBrowserConfig {
+            user_agent: None,
+            http_proxy: None,
+            browser_path: None,
+            object_store: store_name.to_string(),
+            idle_timeout: 30,
+        };
+
+        let fetcher = HeadlessBrowserFetcher::new(&config).await.unwrap();
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET)
+                .path("/")
+                .header("user-agent", config.get_user_agent());
+
+            then.status(500).body(test_response);
+        });
+
+        let record = Record {
+            uri: server.base_url(),
+            task_id: task_id,
+            metadata: vec![],
+        };
+
+        let response = fetcher.on_message(record).await.unwrap();
+
+        mock.assert();
+
+        let http_response: &HttpResponse = match response.metadata.first() {
+            Some(RecordMetadata::HttpResponse(r)) => r,
+            _ => panic!("headless browser did not create a response object"),
+        };
+
+        assert_eq!(http_response.status, Some(500));
+        assert_eq!(http_response.request.method, "GET");
+        assert_eq!(http_response.error, None);
+        assert!(http_response.response_headers.len() > 1);
+        assert!(http_response.request.request_headers.len() > 1);
+
+        let key = http_response.key.clone().unwrap();
+
+        let object_store = dependencies()
+            .lock()
+            .await
+            .get_object_store(&config.object_store)
+            .unwrap();
+
+        let response_body = object_store.get(&key).await.unwrap();
+        let response_string = String::from_utf8(response_body).unwrap();
+
+        assert_eq!(response_string, test_response)
     }
 
     #[tokio::test]
