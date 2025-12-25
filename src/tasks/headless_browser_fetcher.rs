@@ -1,4 +1,6 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap, env::temp_dir, fs::create_dir, path::PathBuf, sync::Arc, time::Duration,
+};
 
 use crate::{
     types::{
@@ -10,7 +12,11 @@ use crate::{
         },
         traits::{object_store::ObjectStore, task::Task},
     },
-    utils::{dependencies::dependencies, fs::download_browser, sync::TabPool},
+    utils::{
+        dependencies::dependencies,
+        fs::{TempDir, download_browser},
+        sync::TabPool,
+    },
 };
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
@@ -25,28 +31,50 @@ use tokio::{
 };
 use uuid::Uuid;
 
+static PREFIXES: &[&str] = &["http://", "https://", "ftp://"];
+
 pub struct HeadlessBrowserFetcher<'a> {
-    browser: Arc<Browser>,
     _handle: JoinHandle<()>,
     pool: Arc<Pool<TabPool<'a>>>,
     config: &'a HeadlessBrowserConfig,
     object_store: Arc<dyn ObjectStore>,
+    data_directory: TempDir,
 }
 
 impl<'a> HeadlessBrowserFetcher<'a> {
     pub async fn new(config: &'a HeadlessBrowserConfig) -> Result<Self, AppError> {
+        let data_directory = TempDir::new()?;
+        let user_data_dir = data_directory.path().to_path_buf();
+
         let browser_path = match &config.browser_path {
             Some(p) => PathBuf::from(p),
             None => download_browser(None).await?,
         };
 
-        let mut browser_config = BrowserConfig::builder()
-            .headless_mode(HeadlessMode::True)
-            .chrome_executable(browser_path);
+        let mut args = vec![
+            "--no-first-run".to_string(),
+            "--no-default-browser-check".to_string(),
+            "--incognito".to_string(),
+            "--disable-cache".to_string(),
+            "--disk-cache-size=0".to_string(),
+            "--media-cache-size=0".to_string(),
+            "--disable-application-cache".to_string(),
+            "--disable-service-worker".to_string(),
+            "--disable-features=NetworkServiceInProcess".to_string(),
+            "--disable-background-networking".to_string(),
+            "--disable-default-apps".to_string(),
+            "--disable-sync".to_string(),
+        ];
 
         if let Some(http_proxy) = &config.proxy_server {
-            browser_config = browser_config.arg(format!("--proxy-server={}", http_proxy))
+            args.push(format!("--proxy-server={}", http_proxy))
         }
+
+        let browser_config = BrowserConfig::builder()
+            .user_data_dir(user_data_dir)
+            .headless_mode(HeadlessMode::True)
+            .args(args)
+            .chrome_executable(browser_path);
 
         let (browser, mut handler) = Browser::launch(browser_config.build()?).await?;
         let browser = Arc::new(browser);
@@ -70,11 +98,11 @@ impl<'a> HeadlessBrowserFetcher<'a> {
             .get_object_store(&config.object_store)?;
 
         Ok(Self {
-            browser,
             _handle,
             pool,
             config,
             object_store,
+            data_directory,
         })
     }
 
@@ -109,6 +137,21 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                     request_headers = Some(e.request.headers.clone());
                 }
                 Some(e) = resps.next() => {
+                    let url = e.response.url.clone();
+
+                    if !PREFIXES.iter().any(|p| url.starts_with(p)) {
+                        return Ok(HttpResponse {
+                            status: None,
+                            request: HttpRequest {
+                                method: "GET".to_string(),
+                                request_headers: HashMap::new(),
+                            },
+                            response_headers: HashMap::new(),
+                            key: None,
+                            error: Some("Request failed".to_string()),
+                        });
+                    }
+
                     last_event = Instant::now();
                     status = Some(e.response.status);
                     response_headers = Some(e.response.headers.clone());
@@ -244,14 +287,14 @@ mod tests {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
-                .path("/")
+                .path("/test")
                 .header("user-agent", config.get_user_agent());
 
             then.status(200).body(test_response);
         });
 
         let record = Record {
-            uri: server.base_url(),
+            uri: format!("{}/test", server.base_url()),
             task_id: task_id,
             metadata: vec![],
         };
@@ -354,6 +397,39 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_error() {
-        unimplemented!();
+        let path = temp_dir().join(Uuid::new_v4().to_string());
+        let store = FileSystemObjectStore::new(path).await.unwrap();
+        let store_name = "test-object-store";
+        let task_id = Uuid::new_v4().to_string();
+
+        dependencies()
+            .lock()
+            .await
+            .set_object_store(store_name, Arc::new(store))
+            .unwrap();
+
+        let config = HeadlessBrowserConfig {
+            user_agent: None,
+            proxy_server: None,
+            browser_path: None,
+            object_store: store_name.to_string(),
+            timeout: 30,
+        };
+
+        let fetcher = HeadlessBrowserFetcher::new(&config).await.unwrap();
+        let record = Record {
+            uri: "http://127.0.0.1:9".to_string(),
+            task_id: task_id,
+            metadata: vec![],
+        };
+
+        let response = fetcher.on_message(record).await.unwrap();
+
+        let http_response: &HttpResponse = match response.metadata.first() {
+            Some(RecordMetadata::HttpResponse(r)) => r,
+            _ => panic!("headless browser did not create a response object"),
+        };
+
+        assert_eq!(http_response.error, Some("Request failed".to_string()))
     }
 }
