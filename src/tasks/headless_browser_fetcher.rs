@@ -44,7 +44,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
             .headless_mode(HeadlessMode::True)
             .chrome_executable(browser_path);
 
-        if let Some(http_proxy) = &config.http_proxy {
+        if let Some(http_proxy) = &config.proxy_server {
             browser_config = browser_config.arg(format!("--proxy-server={}", http_proxy))
         }
 
@@ -183,7 +183,7 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
             tab,
             message.uri.clone(),
             self.object_store.clone(),
-            Duration::from_secs(self.config.idle_timeout as u64),
+            Duration::from_secs(self.config.timeout as u64),
         )
         .await
         {
@@ -234,10 +234,10 @@ mod tests {
 
         let config = HeadlessBrowserConfig {
             user_agent: None,
-            http_proxy: None,
+            proxy_server: None,
             browser_path: None,
             object_store: store_name.to_string(),
-            idle_timeout: 30,
+            timeout: 30,
         };
 
         let fetcher = HeadlessBrowserFetcher::new(&config).await.unwrap();
@@ -301,10 +301,10 @@ mod tests {
 
         let config = HeadlessBrowserConfig {
             user_agent: None,
-            http_proxy: None,
+            proxy_server: None,
             browser_path: None,
             object_store: store_name.to_string(),
-            idle_timeout: 30,
+            timeout: 30,
         };
 
         let fetcher = HeadlessBrowserFetcher::new(&config).await.unwrap();
