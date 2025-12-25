@@ -46,6 +46,6 @@ impl<'a> ManageObject for TabPool<'a> {
         _o: &mut Self::Object,
         _status: &ObjectStatus,
     ) -> Result<(), Self::Error> {
-        Ok(())
+        Err(AppError::Generic("discard tab after use".to_string()))
     }
 }

@@ -119,24 +119,49 @@ impl<'a> HeadlessBrowserFetcher<'a> {
             .event_listener::<network::EventResponseReceived>()
             .await?;
 
+        let mut fins = page
+            .event_listener::<network::EventLoadingFinished>()
+            .await?;
+        let mut fails = page.event_listener::<network::EventLoadingFailed>().await?;
+
         let mut nav = Box::pin(page.goto(url));
         let mut request_headers: Option<network::Headers> = None;
         let mut response_headers: Option<network::Headers> = None;
         let mut last_event = Instant::now();
         let mut status: Option<i64> = None;
         let mut body: Option<Vec<u8>> = None;
+
+        let mut saw_request = false;
+        let mut saw_response = false;
+        let mut saw_body = false;
+
+        let mut response_request_id: Option<network::RequestId> = None;
         let method = "GET";
+        let mut nav_done = false;
 
         loop {
             tokio::select! {
-                _ = &mut nav => {
-                    break;
+                _ = &mut nav, if !nav_done => {
+                    last_event = Instant::now();
+                    nav_done = true;
+
+                    if saw_request && saw_response && saw_body {
+                        break;
+                    }
                 }
+
                 Some(e) = reqs.next() => {
+                    saw_request = true;
                     last_event = Instant::now();
                     request_headers = Some(e.request.headers.clone());
+
+                    if saw_response && saw_body {
+                        break;
+                    }
                 }
+
                 Some(e) = resps.next() => {
+                    saw_response = true;
                     let url = e.response.url.clone();
 
                     if !PREFIXES.iter().any(|p| url.starts_with(p)) {
@@ -156,17 +181,53 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                     status = Some(e.response.status);
                     response_headers = Some(e.response.headers.clone());
 
-                    let request_id = e.request_id.clone();
-                    let resp = page
-                        .execute(network::GetResponseBodyParams { request_id })
-                        .await?;
+                    response_request_id = Some(e.request_id.clone());
 
-                    body = Some(if resp.base64_encoded {
-                        general_purpose::STANDARD.decode(&resp.body)?
-                    } else {
-                        resp.body.clone().into_bytes()
-                    });
+                    if saw_request && saw_body {
+                        break;
+                    }
                 }
+
+                Some(e) = fins.next() => {
+                    last_event = Instant::now();
+
+                    if response_request_id.as_ref() == Some(&e.request_id) {
+                        let request_id = e.request_id.clone();
+                        let resp = page
+                            .execute(network::GetResponseBodyParams { request_id })
+                            .await?;
+
+                        body = Some(if resp.base64_encoded {
+                            general_purpose::STANDARD.decode(&resp.body)?
+                        } else {
+                            resp.body.clone().into_bytes()
+                        });
+
+                        saw_body = true;
+
+                        if saw_request && saw_response {
+                            break;
+                        }
+                    }
+                }
+
+                Some(e) = fails.next() => {
+                    last_event = Instant::now();
+
+                    if response_request_id.as_ref() == Some(&e.request_id) {
+                        return Ok(HttpResponse {
+                            status: None,
+                            request: HttpRequest {
+                                method: "GET".to_string(),
+                                request_headers: HashMap::new(),
+                            },
+                            response_headers: HashMap::new(),
+                            key: None,
+                            error: Some(e.error_text.clone()),
+                        });
+                    }
+                }
+
                 _ = sleep_until(last_event + idle_timeout) => {
                     break;
                 }
