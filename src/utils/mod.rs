@@ -1,3 +1,4 @@
 pub mod dependencies;
 pub mod fs;
 pub mod sync;
+pub mod web;

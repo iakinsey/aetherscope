@@ -1,6 +1,4 @@
-use std::{
-    collections::HashMap, env::temp_dir, fs::create_dir, path::PathBuf, sync::Arc, time::Duration,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
     types::{
@@ -20,7 +18,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
-use chromiumoxide::{Browser, BrowserConfig, Page};
+use chromiumoxide::{Browser, BrowserConfig};
 use chromiumoxide::{browser::HeadlessMode, cdp::browser_protocol::network};
 use fastpool::bounded::{Object, Pool, PoolConfig};
 use futures::StreamExt;
@@ -318,7 +316,7 @@ mod tests {
 
     use httpmock::{Method::GET, MockServer};
 
-    use crate::services::object_store::fs::FileSystemObjectStore;
+    use crate::{services::object_store::fs::FileSystemObjectStore, utils::web::get_user_agent};
 
     use super::*;
 
@@ -349,8 +347,7 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(GET)
                 .path("/test")
-                .header("user-agent", config.get_user_agent());
-
+                .header("user-agent", get_user_agent(config.user_agent.clone()));
             then.status(200).body(test_response);
         });
 
@@ -416,7 +413,7 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(GET)
                 .path("/")
-                .header("user-agent", config.get_user_agent());
+                .header("user-agent", get_user_agent(config.user_agent.clone()));
 
             then.status(500).body(test_response);
         });
