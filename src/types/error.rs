@@ -16,6 +16,8 @@ pub enum AppError {
     IOError(#[from] std::io::Error),
     #[error(transparent)]
     Base64DecodeError(#[from] base64::DecodeError),
+    #[error(transparent)]
+    ReqwestError(#[from] reqwest::Error),
     #[error("HTTP {method} {status}: {message}")]
     Http {
         status: i64,
