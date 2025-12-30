@@ -64,8 +64,8 @@ impl<'a> HeadlessBrowserFetcher<'a> {
             "--disable-sync".to_string(),
         ];
 
-        if let Some(http_proxy) = &config.proxy_server {
-            args.push(format!("--proxy-server={}", http_proxy))
+        if let Some(proxy_server) = &config.proxy_server {
+            args.push(format!("--proxy-server={}", proxy_server))
         }
 
         let browser_config = BrowserConfig::builder()
