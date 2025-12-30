@@ -1,9 +1,16 @@
 use std::{io::ErrorKind, path::PathBuf};
 
-use async_trait::async_trait;
-use tokio::fs::{create_dir_all, read, remove_file, write};
-
 use crate::types::{error::AppError, traits::object_store::ObjectStore};
+use async_trait::async_trait;
+use bytes::Bytes;
+use futures::stream::BoxStream;
+use futures_util::StreamExt;
+use futures_util::stream::Stream;
+use tokio::fs::{create_dir_all, read, remove_file, write};
+use tokio::{
+    fs::File,
+    io::{AsyncWriteExt, BufWriter},
+};
 
 pub struct FileSystemObjectStore {
     path: PathBuf,
@@ -31,6 +38,23 @@ impl ObjectStore for FileSystemObjectStore {
             Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
             Err(e) => Err(e.into()),
         }
+    }
+
+    async fn put_stream(
+        &self,
+        key: &str,
+        mut stream: BoxStream<'_, Result<Bytes, AppError>>,
+    ) -> Result<(), AppError> {
+        let file = File::create(self.path.join(key)).await?;
+        let mut writer = BufWriter::new(file);
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            writer.write_all(&chunk).await?;
+        }
+
+        writer.flush().await?;
+        Ok(())
     }
 }
 

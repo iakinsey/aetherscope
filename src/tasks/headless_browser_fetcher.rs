@@ -301,11 +301,13 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
                 error: Some(e.to_string()),
             },
         };
+        let mut metadata = message.metadata;
+        metadata.push(RecordMetadata::HttpResponse(response));
 
         Ok(Record {
             uri: message.uri,
             task_id: message.task_id,
-            metadata: vec![RecordMetadata::HttpResponse(response)],
+            metadata: metadata,
         })
     }
 }
