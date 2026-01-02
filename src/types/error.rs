@@ -8,6 +8,8 @@ pub enum AppError {
     HeadlessBrowserFetcherError(String),
     #[error("Mising dependency: {0}")]
     MissingDependency(String),
+    #[error("index out of bounds")]
+    IndexOutOfBounds,
     #[error(transparent)]
     CdpError(#[from] chromiumoxide::error::CdpError),
     #[error(transparent)]

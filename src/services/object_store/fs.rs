@@ -1,16 +1,14 @@
 use std::{io::ErrorKind, path::PathBuf};
 
+use crate::types::traits::object_store::AsyncReadSeek;
 use crate::types::{error::AppError, traits::object_store::ObjectStore};
 use async_trait::async_trait;
 use bytes::Bytes;
+use futures::StreamExt;
 use futures::stream::BoxStream;
-use futures_util::StreamExt;
-use futures_util::stream::Stream;
+use tokio::fs::File;
 use tokio::fs::{create_dir_all, read, remove_file, write};
-use tokio::{
-    fs::File,
-    io::{AsyncWriteExt, BufWriter},
-};
+use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
 
 pub struct FileSystemObjectStore {
     path: PathBuf,
@@ -55,6 +53,13 @@ impl ObjectStore for FileSystemObjectStore {
 
         writer.flush().await?;
         Ok(())
+    }
+    async fn get_stream(
+        &self,
+        key: &str,
+    ) -> Result<Box<dyn AsyncReadSeek + Send + Unpin>, AppError> {
+        let file = File::open(self.path.join(key)).await?;
+        Ok(Box::new(BufReader::new(file)))
     }
 }
 

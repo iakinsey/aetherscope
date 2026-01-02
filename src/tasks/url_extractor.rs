@@ -20,6 +20,7 @@ impl<'a> UrlExtractor<'a> {
     }
 }
 
+// TODO use spawn_blocking
 #[async_trait]
 impl<'a> Task for UrlExtractor<'a> {
     async fn on_message(&self, message: Record) -> Result<Record, AppError> {

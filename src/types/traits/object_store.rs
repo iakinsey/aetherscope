@@ -2,7 +2,10 @@ use crate::types::error::AppError;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::BoxStream;
-use futures_util::stream::Stream;
+use tokio::io::{AsyncRead, AsyncSeek};
+
+pub trait AsyncReadSeek: AsyncRead + AsyncSeek {}
+impl<T: AsyncRead + AsyncSeek + ?Sized> AsyncReadSeek for T {}
 
 #[async_trait]
 pub trait ObjectStore: Send + Sync {
@@ -13,5 +16,9 @@ pub trait ObjectStore: Send + Sync {
         key: &str,
         stream: BoxStream<'_, Result<Bytes, AppError>>,
     ) -> Result<(), AppError>;
+    async fn get_stream(
+        &self,
+        key: &str,
+    ) -> Result<Box<dyn AsyncReadSeek + Send + Unpin>, AppError>;
     async fn delete(&self, key: &str) -> Result<(), AppError>;
 }
