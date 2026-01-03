@@ -10,6 +10,8 @@ pub enum AppError {
     MissingDependency(String),
     #[error("index out of bounds")]
     IndexOutOfBounds,
+    #[error("invalid utf8")]
+    InvalidUtf8,
     #[error(transparent)]
     CdpError(#[from] chromiumoxide::error::CdpError),
     #[error(transparent)]

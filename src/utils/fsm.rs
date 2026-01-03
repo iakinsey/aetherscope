@@ -1,6 +1,6 @@
-use std::str::Chars;
+use std::{io::ErrorKind, str::Chars};
 
-use crate::types::{error::AppError, structs, traits::object_store::AsyncReadSeek};
+use crate::types::{error::AppError, traits::object_store::AsyncReadSeek};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 
 #[derive(PartialEq, Eq)]
@@ -28,7 +28,15 @@ impl UriExtractorFSM {
 
     pub async fn perform(mut self) -> Result<Vec<String>, AppError> {
         while self.state != ParseState::Terminate {
-            self.next().await?;
+            match self.next().await {
+                Ok(_) => continue,
+                Err(AppError::IOError(e)) if e.kind() == ErrorKind::UnexpectedEof => {
+                    self.state = ParseState::Terminate;
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
         }
 
         return Ok(self.uris);
@@ -44,7 +52,21 @@ impl UriExtractorFSM {
     }
 
     async fn read_new_char(&mut self) -> Result<(), AppError> {
-        unimplemented!()
+        loop {
+            match self.read_exact_chars(1).await?.as_slice() {
+                ['h'] => {
+                    self.state = ParseState::ReadLink;
+                    break;
+                }
+                ['<'] => {
+                    self.state = ParseState::ReadHtmlTag;
+                    break;
+                }
+                _ => continue,
+            }
+        }
+
+        Ok(())
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -57,6 +79,35 @@ impl UriExtractorFSM {
         Ok(buf)
     }
 
+    pub async fn read_exact_chars(&mut self, n: usize) -> Result<Vec<char>, AppError> {
+        let mut out = Vec::with_capacity(n);
+        let mut buf = [0u8; 4];
+        let mut len = 0usize;
+
+        while out.len() < n {
+            let mut b = [0u8; 1];
+            self.buf.read_exact(&mut b).await?;
+            buf[len] = b[0];
+            len += 1;
+
+            match str::from_utf8(&buf[..len]) {
+                Ok(s) => {
+                    let ch = s.chars().next().ok_or(AppError::InvalidUtf8)?;
+                    out.push(ch);
+                    len = 0;
+                }
+                Err(e) if e.error_len().is_none() => {
+                    if len == 4 {
+                        return Err(AppError::InvalidUtf8);
+                    }
+                }
+                Err(_) => return Err(AppError::InvalidUtf8),
+            }
+        }
+
+        Ok(out)
+    }
+
     pub async fn position(&mut self) -> Result<u64, AppError> {
         Ok(self.buf.seek(SeekFrom::Current(0)).await?)
     }
@@ -66,15 +117,7 @@ impl UriExtractorFSM {
         Ok(())
     }
 
-    async fn read_until_match(&mut self, chars: Vec<char>) -> Result<bool, AppError> {
-        let start = self.position().await?;
-
-        loop {
-            // TODO
-        }
-
-        unimplemented!();
-    }
+    pub async fn read_until_match_set(&mut self, )
 
     ////////////////////////////////////////////////////////////////////////////
     // Html reading states
