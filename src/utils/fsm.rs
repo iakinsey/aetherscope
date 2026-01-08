@@ -1,4 +1,8 @@
-use std::{io::ErrorKind, str::Chars};
+use std::{
+    collections::HashSet,
+    io::ErrorKind,
+    str::{Chars, from_utf8},
+};
 
 use crate::types::{error::AppError, traits::object_store::AsyncReadSeek};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
@@ -90,7 +94,7 @@ impl UriExtractorFSM {
             buf[len] = b[0];
             len += 1;
 
-            match str::from_utf8(&buf[..len]) {
+            match from_utf8(&buf[..len]) {
                 Ok(s) => {
                     let ch = s.chars().next().ok_or(AppError::InvalidUtf8)?;
                     out.push(ch);
@@ -108,6 +112,31 @@ impl UriExtractorFSM {
         Ok(out)
     }
 
+    pub async fn read_char(&mut self) -> Result<char, AppError> {
+        let mut buf = [0u8; 4];
+        let mut len = 0usize;
+
+        loop {
+            let mut b = [0u8; 1];
+            self.buf.read_exact(&mut b).await?;
+            buf[len] = b[0];
+            len += 1;
+
+            match from_utf8(&buf[..len]) {
+                Ok(s) => {
+                    let ch = s.chars().next().ok_or(AppError::InvalidUtf8)?;
+                    return Ok(ch);
+                }
+                Err(e) if e.error_len().is_none() => {
+                    if len == 4 {
+                        return Err(AppError::InvalidUtf8);
+                    }
+                }
+                Err(_) => return Err(AppError::InvalidUtf8),
+            }
+        }
+    }
+
     pub async fn position(&mut self) -> Result<u64, AppError> {
         Ok(self.buf.seek(SeekFrom::Current(0)).await?)
     }
@@ -117,6 +146,7 @@ impl UriExtractorFSM {
         Ok(())
     }
 
+    // Returns true if the next characters in the buffer match against pattern, false if not
     pub async fn match_next(&mut self, pattern: Vec<char>, rewind: bool) -> Result<bool, AppError> {
         let position = self.position().await?;
         let mut matches = true;
@@ -137,6 +167,32 @@ impl UriExtractorFSM {
         }
 
         Ok(matches)
+    }
+
+    pub async fn get_until_mismatch(
+        &mut self,
+        legal_chars: HashSet<char>,
+    ) -> Result<String, AppError> {
+        let mut result = vec![];
+
+        loop {
+            let next = match self.read_char().await {
+                Ok(n) => n,
+                Err(AppError::IOError(e)) if e.kind() == ErrorKind::UnexpectedEof => {
+                    break;
+                }
+                Err(e) => return Err(e),
+            };
+
+            if legal_chars.contains(&next) {
+                result.push(next);
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        Ok(String::from_iter(result))
     }
 
     ////////////////////////////////////////////////////////////////////////////
