@@ -117,7 +117,27 @@ impl UriExtractorFSM {
         Ok(())
     }
 
-    pub async fn read_until_match_set(&mut self, )
+    pub async fn match_next(&mut self, pattern: Vec<char>, rewind: bool) -> Result<bool, AppError> {
+        let position = self.position().await?;
+        let mut matches = true;
+
+        for char in pattern {
+            let next = self.read_exact_chars(1).await?;
+
+            if next.as_slice() == [char] {
+                continue;
+            }
+
+            matches = false;
+            break;
+        }
+
+        if rewind {
+            self.set_position(position).await?;
+        }
+
+        Ok(matches)
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Html reading states
