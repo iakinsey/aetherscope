@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    io::ErrorKind,
-    str::{Chars, from_utf8},
-};
+use std::{collections::HashSet, io::ErrorKind, str::from_utf8};
 
 use crate::types::{error::AppError, traits::object_store::AsyncReadSeek};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
@@ -57,12 +53,12 @@ impl UriExtractorFSM {
 
     async fn read_new_char(&mut self) -> Result<(), AppError> {
         loop {
-            match self.read_exact_chars(1).await?.as_slice() {
-                ['h'] => {
+            match self.read_char().await? {
+                'h' => {
                     self.state = ParseState::ReadLink;
                     break;
                 }
-                ['<'] => {
+                '<' => {
                     self.state = ParseState::ReadHtmlTag;
                     break;
                 }
@@ -152,9 +148,9 @@ impl UriExtractorFSM {
         let mut matches = true;
 
         for char in pattern {
-            let next = self.read_exact_chars(1).await?;
+            let next = self.read_char().await?;
 
-            if next.as_slice() == [char] {
+            if next == char {
                 continue;
             }
 
