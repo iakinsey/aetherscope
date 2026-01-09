@@ -195,6 +195,25 @@ impl UriExtractorFSM {
         Ok(String::from_iter(result))
     }
 
+    pub async fn match_next_or(
+        &mut self,
+        chars: HashSet<char>,
+        rewind: bool,
+    ) -> Result<Option<char>, AppError> {
+        let position = self.position().await?;
+        let next = self.read_char().await?;
+
+        if rewind {
+            self.set_position(position).await?;
+        }
+
+        if chars.contains(&next) {
+            Ok(Some(next))
+        } else {
+            Ok(None)
+        }
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Html reading states
     ////////////////////////////////////////////////////////////////////////////
