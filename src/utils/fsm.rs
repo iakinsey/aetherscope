@@ -1,4 +1,4 @@
-use std::{collections::HashSet, io::ErrorKind, str::from_utf8};
+use std::{collections::HashSet, io::ErrorKind, str::from_utf8, sync::OnceLock};
 
 use crate::types::{error::AppError, traits::object_store::AsyncReadSeek};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
@@ -9,6 +9,16 @@ enum ParseState {
     ReadHtmlTag,
     ReadLink,
     Terminate,
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Patterns
+////////////////////////////////////////////////////////////////////////////////
+
+static FOLLOWS_HTTP: OnceLock<HashSet<char>> = OnceLock::new();
+
+fn follows_http() -> &'static HashSet<char> {
+    FOLLOWS_HTTP.get_or_init(|| ['s', ':'].into_iter().collect())
 }
 
 pub struct UriExtractorFSM {
@@ -155,11 +165,12 @@ impl UriExtractorFSM {
             }
 
             matches = false;
-            break;
-        }
 
-        if rewind {
-            self.set_position(position).await?;
+            if rewind {
+                self.set_position(position).await?;
+            }
+
+            break;
         }
 
         Ok(matches)
@@ -167,7 +178,7 @@ impl UriExtractorFSM {
 
     pub async fn get_until_mismatch(
         &mut self,
-        legal_chars: HashSet<char>,
+        legal_chars: &'static HashSet<char>,
     ) -> Result<String, AppError> {
         let mut result = vec![];
 
@@ -193,19 +204,19 @@ impl UriExtractorFSM {
 
     pub async fn match_next_or(
         &mut self,
-        chars: HashSet<char>,
+        chars: &'static HashSet<char>,
         rewind: bool,
     ) -> Result<Option<char>, AppError> {
         let position = self.position().await?;
         let next = self.read_char().await?;
 
-        if rewind {
-            self.set_position(position).await?;
-        }
-
         if chars.contains(&next) {
             Ok(Some(next))
         } else {
+            if rewind {
+                self.set_position(position).await?;
+            }
+
             Ok(None)
         }
     }
@@ -215,6 +226,26 @@ impl UriExtractorFSM {
     ////////////////////////////////////////////////////////////////////////////
 
     async fn read_html_tag(&mut self) -> Result<(), AppError> {
+        let mut data = vec![];
+
+        if !self.match_next(vec!['t', 't', 'p'], true).await? {
+            self.state = ParseState::ReadNewChar;
+            return Ok(());
+        }
+
+        let next = self.match_next_or(follows_http(), true).await?;
+
+        if let Some(next) = next {
+            data.push("http");
+
+            if next == 's' {
+                data.push("s");
+            }
+        } else {
+            self.state = ParseState::ReadNewChar;
+            return Ok(());
+        }
+
         unimplemented!()
     }
 
