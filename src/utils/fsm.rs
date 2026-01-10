@@ -241,7 +241,7 @@ impl UriExtractorFSM {
     // Html reading states
     ////////////////////////////////////////////////////////////////////////////
 
-    async fn read_html_tag(&mut self) -> Result<(), AppError> {
+    async fn read_link(&mut self) -> Result<(), AppError> {
         let mut data = vec![];
 
         if !self.match_next(vec!['t', 't', 'p'], true).await? {
@@ -295,7 +295,7 @@ impl UriExtractorFSM {
     // Link reading states
     ////////////////////////////////////////////////////////////////////////////
 
-    async fn read_link(&mut self) -> Result<(), AppError> {
+    async fn read_html_tag(&mut self) -> Result<(), AppError> {
         unimplemented!()
     }
 }
