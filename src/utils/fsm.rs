@@ -71,8 +71,14 @@ impl UriExtractorFSM {
     async fn next(&mut self) -> Result<(), AppError> {
         match self.state {
             ParseState::ReadNewChar => self.read_new_char().await,
-            ParseState::ReadHtmlTag => self.read_html_tag().await,
-            ParseState::ReadLink => self.read_link().await,
+            ParseState::ReadHtmlTag => {
+                self.state = ParseState::ReadNewChar;
+                self.read_html_tag().await
+            }
+            ParseState::ReadLink => {
+                self.state = ParseState::ReadNewChar;
+                self.read_link().await
+            }
             ParseState::Terminate => Ok(()),
         }
     }
@@ -245,7 +251,6 @@ impl UriExtractorFSM {
         let mut data = vec![];
 
         if !self.match_next(vec!['t', 't', 'p'], true).await? {
-            self.state = ParseState::ReadNewChar;
             return Ok(());
         }
 
@@ -258,24 +263,20 @@ impl UriExtractorFSM {
                 data.push("s");
 
                 if !self.match_next(vec![':'], true).await? {
-                    self.state = ParseState::ReadNewChar;
                     return Ok(());
                 }
             } else if next != ':' {
-                self.state = ParseState::ReadNewChar;
                 return Ok(());
             }
 
             data.push(":");
         } else {
-            self.state = ParseState::ReadNewChar;
             return Ok(());
         }
 
         if self.match_next(vec!['/', '/'], true).await? {
             data.push("//")
         } else {
-            self.state = ParseState::ReadNewChar;
             return Ok(());
         }
 
@@ -287,7 +288,6 @@ impl UriExtractorFSM {
             self.uris.push(uri);
         }
 
-        self.state = ParseState::ReadNewChar;
         return Ok(());
     }
 
@@ -296,6 +296,10 @@ impl UriExtractorFSM {
     ////////////////////////////////////////////////////////////////////////////
 
     async fn read_html_tag(&mut self) -> Result<(), AppError> {
-        unimplemented!()
+        if !self.match_next(vec!['a'], true).await? {
+            return Ok(());
+        }
+
+        unimplemented!();
     }
 }
