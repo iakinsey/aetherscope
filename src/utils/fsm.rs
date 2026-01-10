@@ -21,6 +21,22 @@ fn follows_http() -> &'static HashSet<char> {
     FOLLOWS_HTTP.get_or_init(|| ['s', ':'].into_iter().collect())
 }
 
+static LEGAL_URL_CHARS: OnceLock<HashSet<char>> = OnceLock::new();
+
+fn legal_url_chars() -> &'static HashSet<char> {
+    LEGAL_URL_CHARS.get_or_init(|| {
+        [
+            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
+            'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+            'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y',
+            'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '.', '_', '~', ':', '/',
+            '?', '#', '[', ']', '@', '!', '$', '%', '&', '\'', '(', ')', '*', '+', ',', ';', '=',
+        ]
+        .into_iter()
+        .collect()
+    })
+}
+
 pub struct UriExtractorFSM {
     uris: Vec<String>,
     state: ParseState,
@@ -240,13 +256,39 @@ impl UriExtractorFSM {
 
             if next == 's' {
                 data.push("s");
+
+                if !self.match_next(vec![':'], true).await? {
+                    self.state = ParseState::ReadNewChar;
+                    return Ok(());
+                }
+            } else if next != ':' {
+                self.state = ParseState::ReadNewChar;
+                return Ok(());
             }
+
+            data.push(":");
         } else {
             self.state = ParseState::ReadNewChar;
             return Ok(());
         }
 
-        unimplemented!()
+        if self.match_next(vec!['/', '/'], true).await? {
+            data.push("//")
+        } else {
+            self.state = ParseState::ReadNewChar;
+            return Ok(());
+        }
+
+        let url = self.get_until_mismatch(legal_url_chars()).await?;
+        data.push(&url);
+
+        if url.len() > 0 {
+            let uri = data.join("");
+            self.uris.push(uri);
+        }
+
+        self.state = ParseState::ReadNewChar;
+        return Ok(());
     }
 
     ////////////////////////////////////////////////////////////////////////////
