@@ -362,21 +362,47 @@ impl UriExtractorFSM {
 }
 
 #[cfg(test)]
+
 mod tests {
+    use std::io::Cursor;
+
+    use crate::{types::traits::object_store::AsyncReadSeek, utils::fsm::UriExtractorFSM};
+
+    fn reader_from_static_str(s: &'static str) -> Box<dyn AsyncReadSeek + Send + Unpin + 'static> {
+        Box::new(Cursor::new(s.as_bytes()))
+    }
+
     #[tokio::test]
     async fn test_html_tags() {}
 
     #[tokio::test]
-    async fn test_links() {}
+    async fn test_links() {
+        let expected = vec![
+            "http://test.com/a_test?test=test#test",
+            "https://testme.com/help",
+            "http://example.com",
+        ];
+        let contents = reader_from_static_str(
+            r#"
+        The quick brown fox jumps over the lazy dog http://test.com/a_test?test=test#test
+        This is ahttps://testme.com/help^terminateshttp://example.com
+        "#,
+        );
+
+        let extractor = UriExtractorFSM::new(contents);
+        let uris = extractor.perform().await.unwrap();
+
+        assert_eq!(expected, uris);
+    }
+
+    #[tokio::test]
+    async fn test_href_at_various_positions() {}
 
     #[tokio::test]
     async fn test_tags_and_links() {}
 
     #[tokio::test]
     async fn test_empty_string() {}
-
-    #[tokio::test]
-    async fn test_href_at_various_positions() {}
 
     #[tokio::test]
     async fn test_url_ends_at_file_termination() {}
