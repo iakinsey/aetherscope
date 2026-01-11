@@ -37,6 +37,18 @@ fn legal_url_chars() -> &'static HashSet<char> {
     })
 }
 
+static HREF: OnceLock<&[char]> = OnceLock::new();
+
+fn href() -> &'static [char] {
+    HREF.get_or_init(|| &['h', 'r', 'e', 'f', '='])
+}
+
+static TAG_QUOTES: OnceLock<HashSet<char>> = OnceLock::new();
+
+fn tag_quotes() -> &'static HashSet<char> {
+    TAG_QUOTES.get_or_init(|| ['"', '\''].into_iter().collect())
+}
+
 pub struct UriExtractorFSM {
     uris: Vec<String>,
     state: ParseState,
@@ -319,7 +331,7 @@ impl UriExtractorFSM {
             self.uris.push(uri);
         }
 
-        return Ok(());
+        Ok(())
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -331,6 +343,20 @@ impl UriExtractorFSM {
             return Ok(());
         }
 
-        unimplemented!();
+        if !self.read_until_match(href(), '>', true).await? {
+            return Ok(());
+        }
+
+        if self.match_next_or(tag_quotes(), true).await?.is_none() {
+            return Ok(());
+        }
+
+        let url = self.get_until_mismatch(legal_url_chars()).await?;
+
+        if url.len() > 0 {
+            self.uris.push(url);
+        }
+
+        Ok(())
     }
 }
