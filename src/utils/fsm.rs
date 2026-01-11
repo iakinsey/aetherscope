@@ -360,3 +360,24 @@ impl UriExtractorFSM {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn test_html_tags() {}
+
+    #[tokio::test]
+    async fn test_links() {}
+
+    #[tokio::test]
+    async fn test_tags_and_links() {}
+
+    #[tokio::test]
+    async fn test_empty_string() {}
+
+    #[tokio::test]
+    async fn test_href_at_various_positions() {}
+
+    #[tokio::test]
+    async fn test_url_ends_at_file_termination() {}
+}
