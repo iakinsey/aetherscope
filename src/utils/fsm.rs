@@ -1,4 +1,4 @@
-use std::{collections::HashSet, io::ErrorKind, str::from_utf8, sync::OnceLock};
+use std::{collections::HashSet, io::ErrorKind, str::from_utf8, sync::OnceLock, thread::current};
 
 use crate::types::{error::AppError, traits::object_store::AsyncReadSeek};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
@@ -240,6 +240,37 @@ impl UriExtractorFSM {
             }
 
             Ok(None)
+        }
+    }
+
+    pub async fn read_until_match(
+        &mut self,
+        pattern: &[char],
+        term_char: char,
+        rewind: bool,
+    ) -> Result<bool, AppError> {
+        let mut index = 0;
+        let position = self.position().await?;
+
+        loop {
+            let next = self.read_char().await?;
+
+            if next == term_char {
+                if rewind {
+                    self.set_position(position).await?;
+                }
+
+                return Ok(false);
+            }
+
+            if next == pattern[index] {
+                index += 1;
+                if index == pattern.len() {
+                    return Ok(true);
+                }
+            } else {
+                index = 0;
+            }
         }
     }
 

@@ -12,6 +12,8 @@ pub enum AppError {
     IndexOutOfBounds,
     #[error("invalid utf8")]
     InvalidUtf8,
+    #[error("parse error: {0}")]
+    ParseError(&'static str),
     #[error(transparent)]
     CdpError(#[from] chromiumoxide::error::CdpError),
     #[error(transparent)]
