@@ -402,7 +402,15 @@ mod tests {
     async fn test_tags_and_links() {}
 
     #[tokio::test]
-    async fn test_empty_string() {}
+    async fn test_empty_string() {
+        let contents = reader_from_static_str("");
+
+        let extractor = UriExtractorFSM::new(contents);
+        let uris = extractor.perform().await.unwrap();
+        let expected: Vec<String> = vec![];
+
+        assert_eq!(expected, uris);
+    }
 
     #[tokio::test]
     async fn test_url_ends_at_file_termination() {
