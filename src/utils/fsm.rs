@@ -405,5 +405,13 @@ mod tests {
     async fn test_empty_string() {}
 
     #[tokio::test]
-    async fn test_url_ends_at_file_termination() {}
+    async fn test_url_ends_at_file_termination() {
+        let url = "http://test.com/a_test?test=test#test";
+        let contents = reader_from_static_str(url);
+
+        let extractor = UriExtractorFSM::new(contents);
+        let uris = extractor.perform().await.unwrap();
+
+        assert_eq!(vec![url], uris);
+    }
 }
