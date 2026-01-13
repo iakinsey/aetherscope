@@ -203,6 +203,20 @@ mod tests {
     }
 
     #[test]
+    fn normalize_preserves_rfc_file_vs_directory_semantics() {
+        use url::Url;
+
+        let origin_file = Url::parse("http://example.com/test").unwrap();
+        let origin_dir = Url::parse("http://example.com/test/").unwrap();
+
+        let u1 = normalize_url(&origin_file, "hello").unwrap();
+        assert_eq!(u1.as_str(), "http://example.com/hello");
+
+        let u2 = normalize_url(&origin_dir, "hello").unwrap();
+        assert_eq!(u2.as_str(), "http://example.com/test/hello");
+    }
+
+    #[test]
     fn looks_like_domainish_basics() {
         assert!(looks_like_domainish("example.com"));
         assert!(looks_like_domainish("example.com/test"));

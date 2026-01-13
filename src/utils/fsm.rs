@@ -1,6 +1,9 @@
 use std::{collections::HashSet, io::ErrorKind, str::from_utf8, sync::OnceLock, thread::current};
 
-use crate::types::{error::AppError, traits::object_store::AsyncReadSeek};
+use crate::{
+    types::{error::AppError, traits::object_store::AsyncReadSeek},
+    utils::web::normalize_url,
+};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use url::Url;
 
@@ -81,6 +84,9 @@ impl UriExtractorFSM {
                 }
             }
         }
+
+        self.uris.sort_unstable();
+        self.uris.dedup();
 
         return Ok(self.uris);
     }
@@ -291,24 +297,6 @@ impl UriExtractorFSM {
         }
     }
 
-    fn normalize_url(&mut self, url: String) -> Result<String, AppError> {
-        let origin_scheme = self.origin.scheme();
-        let origin_host = match self.origin.host() {
-            Some(e) => e,
-            None => return Err(AppError::ParseError("origin specified has no host")),
-        }
-        .to_string();
-        let mut url = Url::parse(&url).unwrap();
-
-        if url.host().is_none() {
-            url.set_host(Some(&origin_host))?;
-            url.set_scheme(origin_scheme)
-                .map_err(|()| AppError::ParseError("unable to set scheme"))?;
-        }
-
-        Ok(url.to_string())
-    }
-
     ////////////////////////////////////////////////////////////////////////////
     // Html reading states
     ////////////////////////////////////////////////////////////////////////////
@@ -377,8 +365,8 @@ impl UriExtractorFSM {
         let url = self.get_until_mismatch(legal_url_chars()).await?;
 
         if url.len() > 0 {
-            let url = self.normalize_url(url)?;
-            self.uris.push(url);
+            let url = normalize_url(&self.origin, &url)?;
+            self.uris.push(url.to_string());
         }
 
         Ok(())
@@ -399,10 +387,24 @@ mod tests {
     #[tokio::test]
     async fn test_html_tags() {
         let expected = vec![
-            "http://test.com/a_test?test=test#test",
-            "https://testme.com/help",
-            "http://example.com",
+            "http://example.com/test",
+            "http://example.com/test/testme",
+            "http://testagain.com/",
         ];
+
+        let contents = reader_from_static_str(
+            r#"
+            I am an html document.
+            <a href="/test">Hello world</a>
+            <a href="testme">Hello world</a>
+            <a tag="h1234" href="testagain.com">Hello world</a>
+        "#,
+        );
+        let extractor =
+            UriExtractorFSM::new(contents, "http://example.com/test/".to_string()).unwrap();
+        let uris = extractor.perform().await.unwrap();
+
+        assert_eq!(expected, uris);
     }
 
     #[tokio::test]
@@ -421,7 +423,8 @@ mod tests {
 
         // TODO start here instead, it seems the url library is not very resilient and some additional
         // parsing may be necessary
-        let extractor = UriExtractorFSM::new(contents, "http://example.com/test".to_string()).unwrap();
+        let extractor =
+            UriExtractorFSM::new(contents, "http://example.com/test".to_string()).unwrap();
         let uris = extractor.perform().await.unwrap();
 
         assert_eq!(expected, uris);
