@@ -21,6 +21,8 @@ pub enum AppError {
     #[error(transparent)]
     IOError(#[from] std::io::Error),
     #[error(transparent)]
+    UrlParseError(#[from] url::ParseError),
+    #[error(transparent)]
     Base64DecodeError(#[from] base64::DecodeError),
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),

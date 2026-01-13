@@ -2,6 +2,7 @@ use std::{collections::HashSet, io::ErrorKind, str::from_utf8, sync::OnceLock, t
 
 use crate::types::{error::AppError, traits::object_store::AsyncReadSeek};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
+use url::Url;
 
 #[derive(PartialEq, Eq)]
 enum ParseState {
@@ -53,15 +54,19 @@ pub struct UriExtractorFSM {
     uris: Vec<String>,
     state: ParseState,
     buf: Box<dyn AsyncReadSeek + Send + Unpin>,
+    origin: Url,
 }
 
 impl UriExtractorFSM {
-    fn new(buf: Box<dyn AsyncReadSeek + Send + Unpin>) -> Self {
-        Self {
+    fn new(buf: Box<dyn AsyncReadSeek + Send + Unpin>, origin: String) -> Result<Self, AppError> {
+        let origin = Url::parse(&origin)?;
+
+        Ok(Self {
             uris: vec![],
             state: ParseState::ReadNewChar,
             buf,
-        }
+            origin,
+        })
     }
 
     pub async fn perform(mut self) -> Result<Vec<String>, AppError> {
@@ -286,6 +291,24 @@ impl UriExtractorFSM {
         }
     }
 
+    fn normalize_url(&mut self, url: String) -> Result<String, AppError> {
+        let origin_scheme = self.origin.scheme();
+        let origin_host = match self.origin.host() {
+            Some(e) => e,
+            None => return Err(AppError::ParseError("origin specified has no host")),
+        }
+        .to_string();
+        let mut url = Url::parse(&url).unwrap();
+
+        if url.host().is_none() {
+            url.set_host(Some(&origin_host))?;
+            url.set_scheme(origin_scheme)
+                .map_err(|()| AppError::ParseError("unable to set scheme"))?;
+        }
+
+        Ok(url.to_string())
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Html reading states
     ////////////////////////////////////////////////////////////////////////////
@@ -354,6 +377,7 @@ impl UriExtractorFSM {
         let url = self.get_until_mismatch(legal_url_chars()).await?;
 
         if url.len() > 0 {
+            let url = self.normalize_url(url)?;
             self.uris.push(url);
         }
 
@@ -373,7 +397,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_html_tags() {}
+    async fn test_html_tags() {
+        let expected = vec![
+            "http://test.com/a_test?test=test#test",
+            "https://testme.com/help",
+            "http://example.com",
+        ];
+    }
 
     #[tokio::test]
     async fn test_links() {
@@ -389,7 +419,9 @@ mod tests {
         "#,
         );
 
-        let extractor = UriExtractorFSM::new(contents);
+        // TODO start here instead, it seems the url library is not very resilient and some additional
+        // parsing may be necessary
+        let extractor = UriExtractorFSM::new(contents, "http://example.com/test".to_string()).unwrap();
         let uris = extractor.perform().await.unwrap();
 
         assert_eq!(expected, uris);
@@ -405,7 +437,7 @@ mod tests {
     async fn test_empty_string() {
         let contents = reader_from_static_str("");
 
-        let extractor = UriExtractorFSM::new(contents);
+        let extractor = UriExtractorFSM::new(contents, "http://example.com".to_string()).unwrap();
         let uris = extractor.perform().await.unwrap();
         let expected: Vec<String> = vec![];
 
@@ -417,7 +449,7 @@ mod tests {
         let url = "http://test.com/a_test?test=test#test";
         let contents = reader_from_static_str(url);
 
-        let extractor = UriExtractorFSM::new(contents);
+        let extractor = UriExtractorFSM::new(contents, "http://example.com".to_string()).unwrap();
         let uris = extractor.perform().await.unwrap();
 
         assert_eq!(vec![url], uris);
