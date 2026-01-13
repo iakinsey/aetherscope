@@ -431,10 +431,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_href_at_various_positions() {}
+    async fn test_tags_and_links() {
+        let expected = vec![
+            "http://example.com/test/endpoint",
+            "https://testme.com/help",
+        ];
+        let contents = reader_from_static_str(
+            r#"
+            This is ahttps://testme.com/help
+            <a href="endpoint">Hello</a>
+        "#,
+        );
 
-    #[tokio::test]
-    async fn test_tags_and_links() {}
+        // TODO start here instead, it seems the url library is not very resilient and some additional
+        // parsing may be necessary
+        let extractor =
+            UriExtractorFSM::new(contents, "http://example.com/test/".to_string()).unwrap();
+        let uris = extractor.perform().await.unwrap();
+
+        assert_eq!(expected, uris);
+    }
 
     #[tokio::test]
     async fn test_empty_string() {
