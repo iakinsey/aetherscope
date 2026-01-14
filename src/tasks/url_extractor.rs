@@ -63,3 +63,75 @@ impl<'a> Task for UrlExtractor<'a> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, env::temp_dir};
+
+    use uuid::Uuid;
+
+    use crate::{
+        services::object_store::fs::FileSystemObjectStore,
+        types::structs::metadata::http_response::{HttpRequest, HttpResponse},
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_url_extraction() {
+        let path = temp_dir().join(Uuid::new_v4().to_string());
+        let store = FileSystemObjectStore::new(path).await.unwrap();
+        let store_name = "test-object-store";
+        let task_id = Uuid::new_v4().to_string();
+        let contents = r#"
+            I am an html document.
+            <a href="/test">Hello world</a>
+            <a href="testme">Hello world</a>
+            <a tag="h1234" href="testagain.com">Hello world</a>
+        "#
+        .as_bytes();
+
+        let key = Uuid::new_v4().to_string();
+        store.put(&key, contents).await.unwrap();
+
+        let response = HttpResponse {
+            status: Some(200),
+            request: HttpRequest {
+                method: "GET".to_string(),
+                request_headers: HashMap::new(),
+            },
+            response_headers: HashMap::new(),
+            key: Some(key),
+            error: None,
+        };
+
+        dependencies()
+            .lock()
+            .await
+            .set_object_store(store_name, Arc::new(store))
+            .unwrap();
+
+        let config = &UrlExtractorConfig {
+            object_store: store_name.to_string(),
+        };
+        let extractor = UrlExtractor::new(config).await.unwrap();
+        let record = Record {
+            uri: "http://example.com".to_string(),
+            task_id: task_id,
+            metadata: vec![RecordMetadata::HttpResponse(response)],
+        };
+
+        let response = extractor.on_message(record).await.unwrap();
+
+        assert_eq!(response.metadata.len(), 2);
+
+        for meta in response.metadata {
+            let uris = match meta {
+                RecordMetadata::Uris(u) => u,
+                _ => continue,
+            };
+
+            assert_eq!(uris.uris.len(), 3);
+        }
+    }
+}
