@@ -1,1 +1,3 @@
-pub struct UrlExtractorConfig {}
+pub struct UrlExtractorConfig {
+    pub object_store: String,
+}

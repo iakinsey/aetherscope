@@ -61,7 +61,10 @@ pub struct UriExtractorFSM {
 }
 
 impl UriExtractorFSM {
-    fn new(buf: Box<dyn AsyncReadSeek + Send + Unpin>, origin: String) -> Result<Self, AppError> {
+    pub fn new(
+        buf: Box<dyn AsyncReadSeek + Send + Unpin>,
+        origin: String,
+    ) -> Result<Self, AppError> {
         let origin = Url::parse(&origin)?;
 
         Ok(Self {
