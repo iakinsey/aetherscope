@@ -1,4 +1,13 @@
+use std::collections::HashMap;
+
+use bytes::Bytes;
+use futures::TryStreamExt;
+use futures::stream::BoxStream;
+use reqwest::Client;
 use url::{ParseError, Url};
+
+use crate::types::error::AppError;
+use futures::StreamExt;
 
 pub fn get_user_agent(user_agent: Option<String>) -> String {
     if let Some(user_agent) = user_agent {
@@ -82,6 +91,36 @@ fn looks_like_domainish(s: &str) -> bool {
     }
 
     false
+}
+
+pub async fn fetch_http_simple(client: Client, uri: &str) -> Result<Bytes, AppError> {
+    let req = client.get(uri).build()?;
+    let resp = client.execute(req).await?;
+    let status = resp.status().as_u16();
+
+    if status < 200 || status > 299 {
+        return Err(AppError::FetchError(status, uri.to_string()));
+    }
+
+    Ok(resp.bytes().await?)
+}
+
+pub fn get_robots_url(input: &str) -> Result<String, AppError> {
+    let url = Url::parse(input)?;
+
+    let scheme = url.scheme();
+    let host = match url.host_str() {
+        Some(h) => h,
+        None => return Err(AppError::from(url::ParseError::EmptyHost)),
+    };
+    let port = url.port();
+
+    let base = match port {
+        Some(p) => format!("{scheme}://{host}:{p}"),
+        None => format!("{scheme}://{host}"),
+    };
+
+    Ok(format!("{base}/robots.txt"))
 }
 
 #[cfg(test)]
