@@ -1,3 +1,4 @@
+pub mod frontier;
 pub mod frontier_manager;
 pub mod headless_browser_fetcher;
 pub mod http_fetcher;
