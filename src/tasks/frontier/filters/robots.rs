@@ -182,6 +182,24 @@ Disallow: /example/"#,
 
     #[tokio::test]
     async fn test_filter_no_response() {
-        unimplemented!()
+        let user_agent = "test-user-agent";
+        let config = RobotsFilterConfig {
+            http_config: BasicHttpFetcherConfig {
+                proxy_server: None,
+                timeout: 32,
+                user_agent: Some(user_agent.to_string()),
+            },
+        };
+        let filter = RobotsFilter::new(config).unwrap();
+
+        let err = filter
+            .perform(vec!["http://127.0.0.1:9".to_string()], "")
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            err.to_string(),
+            "error sending request for url (http://127.0.0.1:9/robots.txt)"
+        );
     }
 }
