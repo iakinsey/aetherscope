@@ -149,7 +149,36 @@ Disallow: /example/"#,
     }
 
     #[tokio::test]
-    async fn test_filter_invalid_response() {}
+    async fn test_filter_invalid_response() {
+        let user_agent = "test-user-agent";
+        let config = RobotsFilterConfig {
+            http_config: BasicHttpFetcherConfig {
+                proxy_server: None,
+                timeout: 32,
+                user_agent: Some(user_agent.to_string()),
+            },
+        };
+        let filter = RobotsFilter::new(config).unwrap();
+
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET)
+                .header("user-agent", user_agent)
+                .path("/robots.txt");
+            then.status(500);
+        });
+        let err = filter
+            .perform(vec![server.base_url()], "")
+            .await
+            .unwrap_err();
+
+        mock.assert();
+
+        assert_eq!(
+            err.to_string(),
+            format!("HTTP 500: {}/robots.txt", server.base_url())
+        );
+    }
 
     #[tokio::test]
     async fn test_filter_no_response() {
