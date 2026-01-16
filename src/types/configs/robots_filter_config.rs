@@ -1,5 +1,5 @@
-use crate::types::configs::http_fetcher_config::HttpFetcherConfig;
+use crate::types::configs::http_fetcher_config::BasicHttpFetcherConfig;
 
 pub struct RobotsFilterConfig {
-    pub http_config: HttpFetcherConfig,
+    pub http_config: BasicHttpFetcherConfig,
 }
