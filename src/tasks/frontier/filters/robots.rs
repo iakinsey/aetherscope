@@ -149,14 +149,7 @@ Disallow: /example/"#,
     }
 
     #[tokio::test]
-    async fn test_filter_invalid_robots() {
-        unimplemented!()
-    }
-
-    #[tokio::test]
-    async fn test_filter_invalid_response() {
-        unimplemented!()
-    }
+    async fn test_filter_invalid_response() {}
 
     #[tokio::test]
     async fn test_filter_no_response() {
