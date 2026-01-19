@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
     types::{
-        configs::headless_browser::HeadlessBrowserConfig,
+        configs::headless_browser_config::HeadlessBrowserConfig,
         error::AppError,
         structs::{
             metadata::http_response::{HttpRequest, HttpResponse},

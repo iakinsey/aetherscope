@@ -1,12 +1,16 @@
 use crate::types::{
-    configs::robots_filter_config::RobotsFilterConfig, error::AppError,
+    configs::{
+        robots_filter_config::RobotsFilterConfig,
+        unique_filter_config::{self, UniqueFilterConfig},
+    },
+    error::AppError,
     traits::frontier_filter::FrontierFilter,
 };
 
 pub struct UniqueFilter {}
 
 impl UniqueFilter {
-    pub fn new(robots_filter_config: RobotsFilterConfig) -> Result<Self, AppError> {
+    pub fn new(unique_filter_config: UniqueFilterConfig) -> Result<Self, AppError> {
         unimplemented!()
     }
 }
