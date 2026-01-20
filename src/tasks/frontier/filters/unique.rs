@@ -36,7 +36,19 @@ impl UniqueFilter {
         Ok(Self { bloom_filters })
     }
 
-    pub fn check_bloom(&mut self, entities: String) {}
+    pub fn check_bloom(
+        mut filter: BloomFilter,
+        entities: Vec<String>,
+    ) -> Result<Vec<(String, bool)>, AppError> {
+        let mut results = vec![];
+
+        for entity in entities {
+            results.push((entity.clone(), filter.contains(&entity)));
+            filter.insert(&entity);
+        }
+
+        unimplemented!()
+    }
 }
 
 impl FrontierFilter for UniqueFilter {
