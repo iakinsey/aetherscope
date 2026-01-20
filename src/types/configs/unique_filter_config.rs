@@ -14,10 +14,11 @@ pub enum HashSetConfig {
     Empty,
 }
 
+pub struct BloomFilterConfig {}
+
 pub struct FilterConfig {
-    enable: bool,
-    enable_bloom_filter: bool,
-    enable_hash_set: HashSetConfig,
+    bloom_filter_config: BloomFilterConfig,
+    hash_set_config: HashSetConfig,
 }
 pub struct UniqueFilterConfig {
     filter_urls: FilterConfig,
