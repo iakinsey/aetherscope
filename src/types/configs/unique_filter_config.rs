@@ -14,13 +14,17 @@ pub enum HashSetConfig {
     Empty,
 }
 
-pub struct BloomFilterConfig {}
+pub struct BloomFilterConfig {
+    pub enable: bool,
+    pub false_positive_rate: f64,
+    pub expected_size: usize,
+}
 
 pub struct FilterConfig {
-    bloom_filter_config: BloomFilterConfig,
-    hash_set_config: HashSetConfig,
+    pub bloom_filter: BloomFilterConfig,
+    pub hash_set: HashSetConfig,
 }
 pub struct UniqueFilterConfig {
-    filter_urls: FilterConfig,
-    filter_domains: FilterConfig,
+    pub filter_urls: FilterConfig,
+    pub filter_domains: FilterConfig,
 }
