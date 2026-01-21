@@ -43,8 +43,16 @@ impl UniqueFilter {
         let mut results = vec![];
 
         for entity in entities {
-            results.push((entity.clone(), filter.contains(&entity)));
-            filter.insert(&entity);
+            results.push((
+                entity.clone(),
+                match filter.contains(&entity) {
+                    true => true,
+                    false => {
+                        filter.insert(&entity);
+                        false
+                    }
+                },
+            ));
         }
 
         unimplemented!()
