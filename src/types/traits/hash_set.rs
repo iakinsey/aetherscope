@@ -1,3 +1,11 @@
+use async_trait::async_trait;
+
+use crate::types::error::AppError;
+
+#[async_trait]
 pub trait HashSet {
-    fn contains_entities(entities: Vec<String>) -> Vec<(String, bool)>;
+    async fn contains_entities(
+        &self,
+        entities: Vec<String>,
+    ) -> Result<Vec<(String, bool)>, AppError>;
 }

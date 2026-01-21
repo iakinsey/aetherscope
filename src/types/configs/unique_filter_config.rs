@@ -1,11 +1,11 @@
 pub struct SqliteHashSetConfig {
-    enable: bool,
-    path: String,
+    pub enable: bool,
+    pub path: String,
 }
 
 pub struct RedisHashSetConfig {
-    enable: bool,
-    uri: String,
+    pub enable: bool,
+    pub uri: String,
 }
 
 pub enum HashSetConfig {

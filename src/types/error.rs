@@ -28,6 +28,8 @@ pub enum AppError {
     Base64DecodeError(#[from] base64::DecodeError),
     #[error(transparent)]
     ReqwestError(#[from] reqwest::Error),
+    #[error(transparent)]
+    SqlxError(#[from] sqlx::Error),
     #[error("HTTP {method} {status}: {message}")]
     Http {
         status: i64,
