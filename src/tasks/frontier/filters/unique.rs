@@ -36,10 +36,7 @@ impl UniqueFilter {
         Ok(Self { bloom_filters })
     }
 
-    pub fn check_bloom(
-        mut filter: BloomFilter,
-        entities: Vec<String>,
-    ) -> Result<Vec<(String, bool)>, AppError> {
+    pub fn check_bloom(mut filter: BloomFilter, entities: Vec<String>) -> Vec<(String, bool)> {
         let mut results = vec![];
 
         for entity in entities {
@@ -55,7 +52,7 @@ impl UniqueFilter {
             ));
         }
 
-        unimplemented!()
+        results
     }
 }
 
