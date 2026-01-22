@@ -30,6 +30,8 @@ pub enum AppError {
     ReqwestError(#[from] reqwest::Error),
     #[error(transparent)]
     SqlxError(#[from] sqlx::Error),
+    #[error(transparent)]
+    RedisError(#[from] redis::RedisError),
     #[error("HTTP {method} {status}: {message}")]
     Http {
         status: i64,
