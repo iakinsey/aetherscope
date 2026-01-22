@@ -1,10 +1,11 @@
-use std::iter::repeat;
+use std::collections::HashSet;
 
 use async_trait::async_trait;
 use sqlx::{Pool, Row, Sqlite, SqlitePool, query};
 
 use crate::types::{
-    configs::unique_filter_config::SqliteHashSetConfig, error::AppError, traits::hash_set::HashSet,
+    configs::unique_filter_config::SqliteHashSetConfig, error::AppError,
+    traits::check_hash_set::CheckHashSet,
 };
 
 pub struct SqliteHashSet {
@@ -30,46 +31,101 @@ impl SqliteHashSet {
 }
 
 #[async_trait]
-impl HashSet for SqliteHashSet {
+impl CheckHashSet for SqliteHashSet {
     async fn contains_entities(
         &self,
         entities: Vec<String>,
     ) -> Result<Vec<(String, bool)>, AppError> {
-        let insert_vals = repeat("(?)")
+        if entities.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let vals = std::iter::repeat("(?)")
             .take(entities.len())
             .collect::<Vec<_>>()
             .join(",");
 
-        let sql = format!(
+        let select_sql = format!(
             r#"
-        WITH input(name) AS (
-            VALUES {insert_vals}
-        ),
-        inserted AS (
-            INSERT INTO entity(name)
-            SELECT name FROM input
-            ON CONFLICT(name) DO NOTHING
-            RETURNING name
-        )
-        SELECT
-            i.name,
-            (ins.name IS NOT NULL) AS inserted
-        FROM input i
-        LEFT JOIN inserted ins USING (name);
+        WITH input(name) AS (VALUES {vals})
+        SELECT e.name
+        FROM entity e
+        JOIN input i ON i.name = e.name;
         "#
         );
 
-        let mut q = query(&sql);
+        let insert_sql = format!(
+            r#"
+        WITH input(name) AS (VALUES {vals})
+        INSERT OR IGNORE INTO entity(name)
+        SELECT name FROM input;
+        "#
+        );
 
-        for e in entities {
-            q = q.bind(e);
+        let mut tx = self.db.begin().await?;
+        let mut sel = query(&select_sql);
+
+        for e in &entities {
+            sel = sel.bind(e);
         }
 
-        let rows = q.fetch_all(&self.db).await?;
-
-        Ok(rows
+        let existing_rows = sel.fetch_all(&mut *tx).await?;
+        let existing: HashSet<String> = existing_rows
             .into_iter()
-            .map(|r| (r.get::<String, _>("name"), r.get::<i64, _>("inserted") != 0))
+            .map(|r| r.get::<String, _>("name"))
+            .collect();
+        let mut ins = query(&insert_sql);
+
+        for e in &entities {
+            ins = ins.bind(e);
+        }
+
+        ins.execute(&mut *tx).await?;
+        tx.commit().await?;
+
+        Ok(entities
+            .into_iter()
+            .map(|name| {
+                let existed = existing.contains(name.as_str());
+                (name, existed)
+            })
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use uuid::Uuid;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_contains_entities() {
+        let config = SqliteHashSetConfig {
+            enable: true,
+            path: ":memory:".to_string(),
+        };
+
+        let hash_set = SqliteHashSet::new(config).await.unwrap();
+        let entities: Vec<String> = (0..100).map(|_| Uuid::new_v4().to_string()).collect();
+        let results = hash_set.contains_entities(entities.clone()).await.unwrap();
+
+        assert!(results.iter().all(|(_, b)| !*b));
+
+        let mut some_true: Vec<String> = (101..151).map(|_| Uuid::new_v4().to_string()).collect();
+
+        some_true.extend(entities);
+
+        let results = hash_set.contains_entities(some_true).await.unwrap();
+
+        let mut counts = HashMap::new();
+        for (_, b) in &results {
+            *counts.entry(*b).or_insert(0usize) += 1;
+        }
+
+        assert_eq!(counts.get(&true), Some(&100));
+        assert_eq!(counts.get(&false), Some(&50));
     }
 }
