@@ -7,46 +7,48 @@ use crate::{
         redis_hash_set::RedisHashSet, sqlite_hash_set::SqliteHashSet,
     },
     types::{
-        configs::unique_filter_config::{self, HashSetConfig, UniqueFilterConfig},
+        configs::unique_filter_config::{HashSetConfig, UniqueFilterConfig},
         error::AppError,
         traits::{check_hash_set::CheckHashSet, frontier_filter::FrontierFilter},
     },
 };
 
 pub struct UniqueFilter {
-    bloom_filters: HashMap<&'static str, BloomFilter>,
-    domains_hash_set: Option<Box<dyn CheckHashSet>>,
-    urls_hash_set: Option<Box<dyn CheckHashSet>>,
+    domain_bloom_filter: Option<BloomFilter>,
+    url_bloom_filter: Option<BloomFilter>,
+    domain_hash_set: Option<Box<dyn CheckHashSet>>,
+    url_hash_set: Option<Box<dyn CheckHashSet>>,
 }
-
-const DOMAIN_KEY: &'static str = "domain";
-const URL_KEY: &'static str = "url";
 
 impl UniqueFilter {
     pub async fn new(config: UniqueFilterConfig) -> Result<Self, AppError> {
-        let mut bloom_filters = HashMap::new();
         let domain_bloom_config = config.filter_domains.bloom_filter;
         let url_bloom_config = config.filter_urls.bloom_filter;
 
-        if domain_bloom_config.enable {
-            let filter = BloomFilter::with_false_pos(domain_bloom_config.false_positive_rate)
-                .expected_items(domain_bloom_config.expected_size);
-            bloom_filters.insert(DOMAIN_KEY, filter);
-        }
+        let domain_bloom_filter = match domain_bloom_config.enable {
+            true => Some(
+                BloomFilter::with_false_pos(domain_bloom_config.false_positive_rate)
+                    .expected_items(domain_bloom_config.expected_size),
+            ),
+            false => None,
+        };
 
-        if url_bloom_config.enable {
-            let filter = BloomFilter::with_false_pos(domain_bloom_config.false_positive_rate)
-                .expected_items(domain_bloom_config.expected_size);
-            bloom_filters.insert(URL_KEY, filter);
-        }
+        let url_bloom_filter = match url_bloom_config.enable {
+            true => Some(
+                BloomFilter::with_false_pos(domain_bloom_config.false_positive_rate)
+                    .expected_items(domain_bloom_config.expected_size),
+            ),
+            false => None,
+        };
 
-        let domains_hash_set = Self::get_hash_set(config.filter_domains.hash_set).await?;
-        let urls_hash_set = Self::get_hash_set(config.filter_urls.hash_set).await?;
+        let domain_hash_set = Self::get_hash_set(config.filter_domains.hash_set).await?;
+        let url_hash_set = Self::get_hash_set(config.filter_urls.hash_set).await?;
 
         Ok(Self {
-            bloom_filters,
-            domains_hash_set,
-            urls_hash_set,
+            domain_bloom_filter,
+            url_bloom_filter,
+            domain_hash_set,
+            url_hash_set,
         })
     }
 
