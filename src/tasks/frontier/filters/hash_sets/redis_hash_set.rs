@@ -50,3 +50,40 @@ impl CheckHashSet for RedisHashSet {
         Ok(entities.into_iter().zip(existed.into_iter()).collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use uuid::Uuid;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_contains_entities() {
+        let config = RedisHashSetConfig {
+            enable: true,
+            uri: "redis://localhost:6379".to_string(),
+        };
+
+        let hash_set = RedisHashSet::new(config).await.unwrap();
+        let entities: Vec<String> = (0..100).map(|_| Uuid::new_v4().to_string()).collect();
+        let results = hash_set.contains_entities(entities.clone()).await.unwrap();
+
+        assert!(results.iter().all(|(_, b)| !*b));
+
+        let mut some_true: Vec<String> = (101..151).map(|_| Uuid::new_v4().to_string()).collect();
+
+        some_true.extend(entities);
+
+        let results = hash_set.contains_entities(some_true).await.unwrap();
+
+        let mut counts = HashMap::new();
+        for (_, b) in &results {
+            *counts.entry(*b).or_insert(0usize) += 1;
+        }
+
+        assert_eq!(counts.get(&true), Some(&100));
+        assert_eq!(counts.get(&false), Some(&50));
+    }
+}
