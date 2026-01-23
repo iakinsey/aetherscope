@@ -62,7 +62,6 @@ mod tests {
     #[tokio::test]
     async fn test_contains_entities() {
         let config = RedisHashSetConfig {
-            enable: true,
             uri: "redis://localhost:6379".to_string(),
         };
 

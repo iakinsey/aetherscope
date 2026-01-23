@@ -1,10 +1,17 @@
+use crate::{
+    tasks::frontier::filters::hash_sets::{
+        redis_hash_set::RedisHashSet, sqlite_hash_set::SqliteHashSet,
+    },
+    types::{error::AppError, traits::check_hash_set::CheckHashSet},
+};
+
+#[derive(Clone)]
 pub struct SqliteHashSetConfig {
-    pub enable: bool,
     pub path: String,
 }
 
+#[derive(Clone)]
 pub struct RedisHashSetConfig {
-    pub enable: bool,
     pub uri: String,
 }
 

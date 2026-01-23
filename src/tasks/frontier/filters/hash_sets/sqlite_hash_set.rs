@@ -104,7 +104,6 @@ mod tests {
     #[tokio::test]
     async fn test_contains_entities() {
         let config = SqliteHashSetConfig {
-            enable: true,
             path: ":memory:".to_string(),
         };
 
