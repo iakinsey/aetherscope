@@ -27,11 +27,7 @@ pub struct BloomFilterConfig {
     pub expected_size: usize,
 }
 
-pub struct FilterConfig {
+pub struct UniqueFilterConfig {
     pub bloom_filter: BloomFilterConfig,
     pub hash_set: HashSetConfig,
-}
-pub struct UniqueFilterConfig {
-    pub filter_urls: FilterConfig,
-    pub filter_domains: FilterConfig,
 }

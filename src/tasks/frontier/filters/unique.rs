@@ -14,41 +14,25 @@ use crate::{
 };
 
 pub struct UniqueFilter {
-    domain_bloom_filter: Option<BloomFilter>,
-    url_bloom_filter: Option<BloomFilter>,
-    domain_hash_set: Option<Box<dyn CheckHashSet>>,
-    url_hash_set: Option<Box<dyn CheckHashSet>>,
+    bloom_filter: Option<BloomFilter>,
+    hash_set: Option<Box<dyn CheckHashSet>>,
 }
 
 impl UniqueFilter {
     pub async fn new(config: UniqueFilterConfig) -> Result<Self, AppError> {
-        let domain_bloom_config = config.filter_domains.bloom_filter;
-        let url_bloom_config = config.filter_urls.bloom_filter;
-
-        let domain_bloom_filter = match domain_bloom_config.enable {
+        let bloom_filter = match config.bloom_filter.enable {
             true => Some(
-                BloomFilter::with_false_pos(domain_bloom_config.false_positive_rate)
-                    .expected_items(domain_bloom_config.expected_size),
+                BloomFilter::with_false_pos(config.bloom_filter.false_positive_rate)
+                    .expected_items(config.bloom_filter.expected_size),
             ),
             false => None,
         };
 
-        let url_bloom_filter = match url_bloom_config.enable {
-            true => Some(
-                BloomFilter::with_false_pos(domain_bloom_config.false_positive_rate)
-                    .expected_items(domain_bloom_config.expected_size),
-            ),
-            false => None,
-        };
-
-        let domain_hash_set = Self::get_hash_set(config.filter_domains.hash_set).await?;
-        let url_hash_set = Self::get_hash_set(config.filter_urls.hash_set).await?;
+        let hash_set = Self::get_hash_set(config.hash_set).await?;
 
         Ok(Self {
-            domain_bloom_filter,
-            url_bloom_filter,
-            domain_hash_set,
-            url_hash_set,
+            bloom_filter,
+            hash_set,
         })
     }
 
@@ -92,6 +76,24 @@ impl FrontierFilter for UniqueFilter {
         uris: Vec<String>,
         _origin: &str,
     ) -> Result<Vec<(String, bool)>, AppError> {
-        unimplemented!()
+        Ok(match (&mut self.bloom_filter, &mut self.hash_set) {
+            (Some(bloom_filter), None) => uris
+                .iter()
+                .map(|u| (u.clone(), bloom_filter.contains(u)))
+                .collect(),
+            (None, Some(hash_set)) => hash_set.contains_entities(uris).await?,
+            (Some(bloom_filter), Some(hash_set)) => {
+                let (results, false_positives): (Vec<_>, Vec<_>) =
+                    uris.into_iter().partition(|u| bloom_filter.contains(u));
+
+                let mut results: Vec<(String, bool)> =
+                    results.into_iter().map(|u| (u, false)).collect();
+
+                results.extend(hash_set.contains_entities(false_positives).await?);
+
+                results
+            }
+            (None, None) => uris.iter().map(|u| (u.clone(), true)).collect(),
+        })
     }
 }
