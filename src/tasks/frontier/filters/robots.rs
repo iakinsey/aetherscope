@@ -17,6 +17,7 @@ pub struct RobotsFilter {
     user_agent: String,
 }
 
+// TODO store robots.txt and make it queryable
 impl RobotsFilter {
     pub fn new(robots_filter_config: RobotsFilterConfig) -> Result<Self, AppError> {
         let mut builder = Client::builder()
