@@ -1,2 +1,2 @@
 pub mod filters;
-pub mod rankers;
+pub mod scorers;
