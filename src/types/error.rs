@@ -32,6 +32,8 @@ pub enum AppError {
     SqlxError(#[from] sqlx::Error),
     #[error(transparent)]
     RedisError(#[from] redis::RedisError),
+    #[error(transparent)]
+    CdrsTokioError(#[from] cdrs_tokio::error::Error),
     #[error("HTTP {method} {status}: {message}")]
     Http {
         status: i64,

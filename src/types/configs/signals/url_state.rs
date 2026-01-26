@@ -1,6 +1,7 @@
+use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
-use crate::types::{error::AppError, traits::signal::Signal};
+use crate::types::traits::signal::Signal;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UrlState {
@@ -33,11 +34,47 @@ pub struct UrlState {
 }
 
 impl Signal for UrlState {
-    fn get_query() -> String {
-        unimplemented!()
-    }
+    const CREATE_TABLE_QUERY: &'static str = r#"
+        CREATE TABLE IF NOT EXISTS url_state (
+            url_key         blob PRIMARY KEY,
+            host_key        blob,
+            site_key        blob,
+            last_fetch_ts   timestamp,
+            last_status     smallint,
+            etag            text,
+            last_modified   timestamp,
+            fp_simhash      bigint,
+            change_ema      double,
+            soft404_ema     double,
+            thin_ema        double,
+            latency_ms_ema  double,
+            bytes_ema       double
+        )
+    "#;
 
-    fn create_table() -> Result<(), AppError> {
-        unimplemented!()
+    const UPSERT_QUERY: &'static str = r#"
+        INSERT INTO url_state (
+            url_key, host_key, site_key,
+            etag, last_modified,
+            fp_simhash,
+            change_ema, soft404_ema, thin_ema,
+            latency_ms_ema, bytes_ema
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    "#;
+
+    fn bind_values(&self) -> QueryValues {
+        query_values!(
+            self.url_key.clone(),
+            self.host_key.clone(),
+            self.site_key.clone(),
+            self.etag.clone(),
+            self.last_modified.map(|t| t.naive_utc()),
+            self.fp_simhash,
+            self.change_ema,
+            self.soft404_ema,
+            self.thin_ema,
+            self.latency_ms_ema,
+            self.bytes_ema
+        )
     }
 }
