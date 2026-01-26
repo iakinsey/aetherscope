@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::{
     types::{
-        configs::url_extractor_config::UrlExtractorConfig,
+        configs::tasks::url_extractor_config::UrlExtractorConfig,
         error::AppError,
         structs::{
             metadata::uris::Uris,

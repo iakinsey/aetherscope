@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::{
     types::{
-        configs::http_fetcher_config::HttpFetcherConfig,
+        configs::tasks::http_fetcher_config::HttpFetcherConfig,
         error::AppError,
         structs::{
             metadata::http_response::{HttpRequest, HttpResponse},

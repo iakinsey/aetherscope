@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::{
     types::{
-        configs::robots_filter_config::RobotsFilterConfig, error::AppError,
+        configs::filters::robots_filter_config::RobotsFilterConfig, error::AppError,
         traits::frontier_filter::FrontierFilter,
     },
     utils::web::{fetch_http_simple, get_robots_url, get_user_agent},
@@ -93,8 +93,8 @@ mod tests {
         tasks::frontier::filters::robots::RobotsFilter,
         types::{
             configs::{
-                http_fetcher_config::BasicHttpFetcherConfig,
-                robots_filter_config::RobotsFilterConfig,
+                filters::robots_filter_config::RobotsFilterConfig,
+                tasks::http_fetcher_config::BasicHttpFetcherConfig,
             },
             traits::frontier_filter::FrontierFilter,
         },

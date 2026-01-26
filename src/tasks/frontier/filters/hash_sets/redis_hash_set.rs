@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use redis::{Client, cmd, pipe};
 
 use crate::types::{
-    configs::unique_filter_config::RedisHashSetConfig, error::AppError,
+    configs::filters::unique_filter_config::RedisHashSetConfig, error::AppError,
     traits::check_hash_set::CheckHashSet,
 };
 use redis::aio::ConnectionManager;

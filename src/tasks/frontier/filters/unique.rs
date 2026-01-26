@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use fastbloom::BloomFilter;
 
 use crate::{
@@ -7,7 +5,7 @@ use crate::{
         redis_hash_set::RedisHashSet, sqlite_hash_set::SqliteHashSet,
     },
     types::{
-        configs::unique_filter_config::{HashSetConfig, UniqueFilterConfig},
+        configs::filters::unique_filter_config::{HashSetConfig, UniqueFilterConfig},
         error::AppError,
         traits::{check_hash_set::CheckHashSet, frontier_filter::FrontierFilter},
     },

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use sqlx::{Pool, Row, Sqlite, SqlitePool, query};
 
 use crate::types::{
-    configs::unique_filter_config::SqliteHashSetConfig, error::AppError,
+    configs::filters::unique_filter_config::SqliteHashSetConfig, error::AppError,
     traits::check_hash_set::CheckHashSet,
 };
 

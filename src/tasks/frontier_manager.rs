@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::types::{
-    configs::frontier_manager_config::FrontierManagerConfig, error::AppError,
+    configs::tasks::frontier_manager_config::FrontierManagerConfig, error::AppError,
     structs::record::Record, traits::task::Task,
 };
 

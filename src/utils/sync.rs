@@ -7,7 +7,7 @@ use chromiumoxide::cdp::browser_protocol::network::SetUserAgentOverrideParams;
 use fastpool::ManageObject;
 use fastpool::ObjectStatus;
 
-use crate::types::configs::headless_browser_config::HeadlessBrowserConfig;
+use crate::types::configs::tasks::headless_browser_config::HeadlessBrowserConfig;
 use crate::types::error::AppError;
 use crate::utils::web::get_user_agent;
 
