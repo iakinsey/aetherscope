@@ -9,28 +9,27 @@ pub struct UrlState {
     pub url_key: Vec<u8>,
     // Hash of the host (scheme+host+port)
     pub host_key: Vec<u8>,
-    // Hash of eTLD+1
+    // Hash of eTLD+1 (or IP-literal)
     pub site_key: Vec<u8>,
-    // Most recent successful fetch attempt
-    pub last_fetch_ts: Option<DateTime<Utc>>,
-    // Last http response status
-    pub last_status: Option<i16>,
-    // Last observed HTTP etag header value
+
+    // Timestamp of the most recent fetch attempt (successful or failed)
+    pub last_fetch_ts: DateTime<Utc>,
+    // Last HTTP response status (or your synthetic status mapping for failures)
+    pub last_status: i16,
+
+    // Response metadata (may be absent depending on response / failure mode)
     pub etag: Option<String>,
-    // Last observed Last-Modified header value
     pub last_modified: Option<DateTime<Utc>>,
-    // SimHash fingerprint of fetched content
+
+    // Content-derived (may be absent: non-HTML, empty body, blocked, etc.)
     pub fp_simhash: Option<i64>,
-    // EMA of content change events
-    pub change_ema: Option<f64>,
-    // EMA of 404-like responses
-    pub soft404_ema: Option<f64>,
-    // EMA of low-information content
-    pub thin_ema: Option<f64>,
-    // EMA of latency
-    pub latency_ms_ema: Option<f64>,
-    // EMA of byte response size
-    pub bytes_ema: Option<f64>,
+
+    // Online signals (you can initialize these to 0.0 on first write if you prefer)
+    pub change_ema: f64,
+    pub soft404_ema: f64,
+    pub thin_ema: f64,
+    pub latency_ms_ema: f64,
+    pub bytes_ema: f64,
 }
 
 impl Signal for UrlState {
@@ -54,12 +53,20 @@ impl Signal for UrlState {
 
     const UPSERT_QUERY: &'static str = r#"
         INSERT INTO url_state (
-            url_key, host_key, site_key,
-            etag, last_modified,
+            url_key,
+            host_key,
+            site_key,
+            last_fetch_ts,
+            last_status,
+            etag,
+            last_modified,
             fp_simhash,
-            change_ema, soft404_ema, thin_ema,
-            latency_ms_ema, bytes_ema
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            change_ema,
+            soft404_ema,
+            thin_ema,
+            latency_ms_ema,
+            bytes_ema
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     "#;
 
     fn bind_values(&self) -> QueryValues {
@@ -67,6 +74,8 @@ impl Signal for UrlState {
             self.url_key.clone(),
             self.host_key.clone(),
             self.site_key.clone(),
+            self.last_fetch_ts.naive_utc(),
+            self.last_status,
             self.etag.clone(),
             self.last_modified.map(|t| t.naive_utc()),
             self.fp_simhash,
