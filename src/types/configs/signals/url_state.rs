@@ -9,26 +9,27 @@ pub struct UrlState {
     pub url_key: Vec<u8>,
     // Hash of the host (scheme+host+port)
     pub host_key: Vec<u8>,
-    // Hash of eTLD+1 (or IP-literal)
+    // Hash of eTLD+1
     pub site_key: Vec<u8>,
-
-    // Timestamp of the most recent fetch attempt (successful or failed)
+    // Most recent successful fetch attempt
     pub last_fetch_ts: DateTime<Utc>,
-    // Last HTTP response status (or your synthetic status mapping for failures)
+    // Last http response status
     pub last_status: i16,
-
-    // Response metadata (may be absent depending on response / failure mode)
+    // Last observed HTTP etag header value
     pub etag: Option<String>,
+    // Last observed Last-Modified header value
     pub last_modified: Option<DateTime<Utc>>,
-
-    // Content-derived (may be absent: non-HTML, empty body, blocked, etc.)
+    // SimHash fingerprint of fetched content
     pub fp_simhash: Option<i64>,
-
-    // Online signals (you can initialize these to 0.0 on first write if you prefer)
+    // EMA of content change events
     pub change_ema: f64,
+    // EMA of 404-like responses
     pub soft404_ema: f64,
+    // EMA of low-information content
     pub thin_ema: f64,
+    // EMA of latency
     pub latency_ms_ema: f64,
+    // EMA of byte response size
     pub bytes_ema: f64,
 }
 
