@@ -34,6 +34,12 @@ impl Signal for DomainCoverage {
         ) VALUES (?, ?, ?, ?)
     "#;
 
+    fn from_record(
+        record: crate::types::structs::record::Record,
+    ) -> Result<Self, crate::types::error::AppError> {
+        unimplemented!()
+    }
+
     fn bind_values(&self) -> QueryValues {
         query_values!(
             self.domain_key.clone(),

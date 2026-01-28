@@ -1,8 +1,11 @@
 use async_trait::async_trait;
 
 use crate::types::{
-    configs::tasks::signal_extractor_config::SignalExtractorConfig, error::AppError,
-    structs::record::Record, traits::task::Task,
+    configs::tasks::signal_extractor_config::SignalExtractorConfig,
+    error::AppError,
+    signals::url_state::UrlState,
+    structs::record::Record,
+    traits::{signal::Signal, task::Task},
 };
 
 pub struct SignalExtractor<'a> {
@@ -18,6 +21,8 @@ impl<'a> SignalExtractor<'a> {
 #[async_trait]
 impl<'a> Task for SignalExtractor<'a> {
     async fn on_message(&self, message: Record) -> Result<Record, AppError> {
+        // TODO start here next, create a trait for signals so that it can extract
+        // them and output the values for writing.
         unimplemented!()
     }
 }
