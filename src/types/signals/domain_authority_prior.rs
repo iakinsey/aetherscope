@@ -1,7 +1,7 @@
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
-use crate::types::traits::signal::Signal;
+use crate::types::{error::AppError, structs::record::Record, traits::signal::Signal};
 
 // Static or slowly changing authority prior per site.
 // Used to bootstrap importance before sufficient crawl data exists.
@@ -30,9 +30,7 @@ impl Signal for DomainAuthorityPrior {
         ) VALUES (?, ?, ?)
     "#;
 
-    fn from_record(
-        record: crate::types::structs::record::Record,
-    ) -> Result<Self, crate::types::error::AppError> {
+    fn from_record(record: Record) -> Result<Self, AppError> {
         unimplemented!()
     }
 

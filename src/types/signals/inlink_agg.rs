@@ -1,7 +1,7 @@
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
-use crate::types::traits::signal::Signal;
+use crate::types::{error::AppError, structs::record::Record, traits::signal::Signal};
 
 // Aggregated inlink-based importance signals.
 // Stores EMA-style authority for URLs, hosts, or sites,
@@ -40,9 +40,7 @@ impl Signal for InlinkAgg {
         ) VALUES (?, ?, ?, ?, ?)
     "#;
 
-    fn from_record(
-        record: crate::types::structs::record::Record,
-    ) -> Result<Self, crate::types::error::AppError> {
+    fn from_record(record: Record) -> Result<Self, AppError> {
         unimplemented!()
     }
 
