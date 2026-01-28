@@ -1,13 +1,11 @@
-use std::collections::HashMap;
+use std::net::IpAddr;
 
 use bytes::Bytes;
-use futures::TryStreamExt;
-use futures::stream::BoxStream;
+use psl::{domain, domain_str};
 use reqwest::Client;
 use url::{ParseError, Url};
 
 use crate::types::error::AppError;
-use futures::StreamExt;
 
 pub fn get_user_agent(user_agent: Option<String>) -> String {
     if let Some(user_agent) = user_agent {
@@ -17,6 +15,11 @@ pub fn get_user_agent(user_agent: Option<String>) -> String {
     }
 }
 
+/*
+    TODO
+        - Resolve ./ and ../
+        - Remove default hosts/ports (eg 80/443) if set
+*/
 pub fn normalize_url(origin: &Url, href: &str) -> Result<Url, ParseError> {
     let h = href.trim();
 
@@ -121,6 +124,37 @@ pub fn get_robots_url(input: &str) -> Result<String, AppError> {
     };
 
     Ok(format!("{base}/robots.txt"))
+}
+
+pub fn extract_host(u: &Url) -> Result<String, AppError> {
+    let scheme = u.scheme().to_ascii_lowercase();
+
+    let host = u
+        .host_str()
+        .ok_or(AppError::Generic(format!(
+            "failed to get host of url {}",
+            u.to_string()
+        )))?
+        .to_ascii_lowercase();
+
+    let port = u.port_or_known_default().expect("known default port");
+
+    Ok(format!("{}://{}:{}", scheme, host, port))
+}
+
+pub fn extract_site(url: &Url) -> Result<String, AppError> {
+    let host = url.host_str().ok_or(AppError::Generic(format!(
+        "failed to get host of url {}",
+        url.to_string()
+    )))?;
+
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return Ok(ip.to_string());
+    }
+
+    let etld_plus_one = domain_str(host).unwrap_or(host);
+
+    Ok(etld_plus_one.to_string())
 }
 
 #[cfg(test)]

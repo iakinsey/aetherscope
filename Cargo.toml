@@ -25,6 +25,8 @@ src = "0.0.6"
 redis = { version = "1.0.2", features = ["tokio-comp", "connection-manager"] }
 cdrs-tokio = "9.0.0"
 chrono = "0.4.43"
+xxhrs = "2.0.1"
+psl = "2.1.183"
 
 [dev-dependencies]
 httpmock = "0.8.2"

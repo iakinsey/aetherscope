@@ -1,7 +1,14 @@
+use std::str::FromStr;
+
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
+use url::Url;
+use xxhrs::XXH3_128;
 
-use crate::types::{error::AppError, structs::record::Record, traits::signal::Signal};
+use crate::{
+    types::{error::AppError, structs::record::Record, traits::signal::Signal},
+    utils::web::{extract_host, extract_site},
+};
 
 // Per-URL state updated after each fetch attempt.
 // Stores fetch metadata and URL-scoped signals used for ranking,
@@ -74,6 +81,14 @@ impl Signal for UrlState {
     "#;
 
     fn from_record(record: Record) -> Result<Self, AppError> {
+        let url = Url::from_str(&record.uri)?;
+        let site = extract_site(&url)?;
+        let host = extract_host(&url)?;
+
+        let url_key = XXH3_128::hash(record.uri.as_bytes()).to_be_bytes().to_vec();
+        let host_key = XXH3_128::hash(host.as_bytes()).to_be_bytes().to_vec();
+        let site_key = XXH3_128::hash(site.as_bytes()).to_be_bytes().to_vec();
+
         unimplemented!()
     }
 
