@@ -13,6 +13,7 @@ use crate::{
     utils::{dependencies::dependencies, web::get_user_agent},
 };
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use futures_util::TryStreamExt;
 use reqwest::{Client, Proxy};
@@ -47,7 +48,11 @@ impl<'a> HttpFetcher<'a> {
         })
     }
 
-    pub async fn fetch_http_response(&self, uri: &str) -> Result<HttpResponse, AppError> {
+    pub async fn fetch_http_response(
+        &self,
+        uri: &str,
+        request_timestamp: DateTime<Utc>,
+    ) -> Result<HttpResponse, AppError> {
         let req = self.client.get(uri).build()?;
         let (req_headers, method) = {
             let headers: HashMap<String, String> = req
@@ -61,6 +66,7 @@ impl<'a> HttpFetcher<'a> {
             (headers, method)
         };
         let resp = self.client.execute(req).await?;
+        let response_timestamp = Utc::now();
         let status = resp.status().as_u16();
         let response_headers: HashMap<String, String> = resp
             .headers()
@@ -77,11 +83,13 @@ impl<'a> HttpFetcher<'a> {
             request: HttpRequest {
                 method: method.to_string(),
                 request_headers: req_headers,
+                timestamp: request_timestamp,
             },
             response_headers,
             status: Some(status as i64),
             key: Some(key),
             error: None,
+            timestamp: Some(response_timestamp),
         })
     }
 }
@@ -89,17 +97,23 @@ impl<'a> HttpFetcher<'a> {
 #[async_trait]
 impl<'a> Task for HttpFetcher<'a> {
     async fn on_message(&self, message: Record) -> Result<Record, AppError> {
-        let response = match self.fetch_http_response(&message.uri).await {
+        let request_timestamp = Utc::now();
+        let response = match self
+            .fetch_http_response(&message.uri, request_timestamp)
+            .await
+        {
             Ok(r) => r,
             Err(e) => HttpResponse {
                 request: HttpRequest {
                     method: "GET".to_string(),
                     request_headers: HashMap::new(),
+                    timestamp: request_timestamp,
                 },
                 status: None,
                 response_headers: HashMap::new(),
                 key: None,
                 error: Some(e.to_string()),
+                timestamp: None,
             },
         };
         let mut metadata = message.metadata;

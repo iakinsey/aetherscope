@@ -20,6 +20,7 @@ use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
 use chromiumoxide::{Browser, BrowserConfig};
 use chromiumoxide::{browser::HeadlessMode, cdp::browser_protocol::network};
+use chrono::{DateTime, Utc};
 use fastpool::bounded::{Object, Pool, PoolConfig};
 use futures::StreamExt;
 use tokio::{
@@ -109,6 +110,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
         url: String,
         object_store: Arc<dyn ObjectStore>,
         idle_timeout: Duration,
+        request_timestamp: DateTime<Utc>,
     ) -> Result<HttpResponse, AppError> {
         let mut reqs = page
             .event_listener::<network::EventRequestWillBeSent>()
@@ -136,6 +138,8 @@ impl<'a> HeadlessBrowserFetcher<'a> {
         let mut response_request_id: Option<network::RequestId> = None;
         let method = "GET";
         let mut nav_done = false;
+
+        let mut response_timestamp: Option<DateTime<Utc>> = None;
 
         loop {
             tokio::select! {
@@ -165,9 +169,11 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                     if !PREFIXES.iter().any(|p| url.starts_with(p)) {
                         return Ok(HttpResponse {
                             status: None,
+                            timestamp: response_timestamp,
                             request: HttpRequest {
                                 method: "GET".to_string(),
                                 request_headers: HashMap::new(),
+                                timestamp: request_timestamp,
                             },
                             response_headers: HashMap::new(),
                             key: None,
@@ -178,8 +184,11 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                     last_event = Instant::now();
                     status = Some(e.response.status);
                     response_headers = Some(e.response.headers.clone());
-
                     response_request_id = Some(e.request_id.clone());
+
+                    if response_timestamp.is_none() {
+                        response_timestamp = Some(Utc::now());
+                    }
 
                     if saw_request && saw_body {
                         break;
@@ -215,9 +224,11 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                     if response_request_id.as_ref() == Some(&e.request_id) {
                         return Ok(HttpResponse {
                             status: None,
+                            timestamp: response_timestamp,
                             request: HttpRequest {
                                 method: "GET".to_string(),
                                 request_headers: HashMap::new(),
+                                timestamp: request_timestamp,
                             },
                             response_headers: HashMap::new(),
                             key: None,
@@ -239,16 +250,18 @@ impl<'a> HeadlessBrowserFetcher<'a> {
         if let Some(body) = body {
             let storage_key = Uuid::new_v4().to_string();
             object_store.put(&storage_key, &body).await?;
-            key = Some(storage_key)
+            key = Some(storage_key);
         }
 
         Ok(HttpResponse {
             request: HttpRequest {
                 method: method.to_string(),
                 request_headers,
+                timestamp: request_timestamp,
             },
             response_headers,
             status,
+            timestamp: response_timestamp,
             key,
             error: None,
         })
@@ -280,12 +293,14 @@ pub fn headers_to_hashmap(headers: Option<network::Headers>) -> HashMap<String, 
 #[async_trait]
 impl<'a> Task for HeadlessBrowserFetcher<'a> {
     async fn on_message(&self, message: Record) -> Result<Record, AppError> {
+        let request_timestamp = Utc::now();
         let tab = self.pool.get().await?;
         let response = match Self::fetch_http_response(
             tab,
             message.uri.clone(),
             self.object_store.clone(),
             Duration::from_secs(self.config.timeout as u64),
+            request_timestamp,
         )
         .await
         {
@@ -295,10 +310,12 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
                 request: HttpRequest {
                     method: "GET".to_string(),
                     request_headers: HashMap::new(),
+                    timestamp: request_timestamp,
                 },
                 response_headers: HashMap::new(),
                 key: None,
                 error: Some(e.to_string()),
+                timestamp: None,
             },
         };
         let mut metadata = message.metadata;

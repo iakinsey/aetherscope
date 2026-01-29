@@ -68,6 +68,7 @@ impl<'a> Task for UrlExtractor<'a> {
 mod tests {
     use std::{collections::HashMap, env::temp_dir};
 
+    use chrono::Utc;
     use uuid::Uuid;
 
     use crate::{
@@ -99,10 +100,12 @@ mod tests {
             request: HttpRequest {
                 method: "GET".to_string(),
                 request_headers: HashMap::new(),
+                timestamp: Utc::now(),
             },
             response_headers: HashMap::new(),
             key: Some(key),
             error: None,
+            timestamp: None,
         };
 
         dependencies()
