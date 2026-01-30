@@ -100,6 +100,9 @@ impl Signal for UrlState {
             };
 
             let last_fetch_ts = resp.timestamp;
+            let last_status = resp.status;
+            let etag = resp.response_headers.get("Etag");
+            let last_modified = resp.response_headers.get("Last-Modified");
         }
 
         unimplemented!();
