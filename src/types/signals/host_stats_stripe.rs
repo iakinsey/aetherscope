@@ -71,7 +71,7 @@ impl Signal for HostStatsStripe {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     "#;
 
-    fn from_record(record: Record) -> Result<Self, AppError> {
+    fn from_record(record: Record) -> Result<Vec<Self>, AppError> {
         unimplemented!()
     }
 

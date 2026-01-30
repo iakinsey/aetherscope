@@ -34,7 +34,7 @@ impl Signal for HostGate {
         ) VALUES (?, ?, ?, ?)
     "#;
 
-    fn from_record(record: Record) -> Result<Self, AppError> {
+    fn from_record(record: Record) -> Result<Vec<Self>, AppError> {
         unimplemented!()
     }
 

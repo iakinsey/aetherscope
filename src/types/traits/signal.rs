@@ -19,7 +19,7 @@ pub trait Signal: Sized + Send + Sync {
     const CREATE_TABLE_QUERY: &'static str;
     const UPSERT_QUERY: &'static str;
 
-    fn from_record(record: Record) -> Result<Self, AppError>;
+    fn from_record(record: Record) -> Result<Vec<Self>, AppError>;
 
     fn bind_values(&self) -> QueryValues;
 
