@@ -1,0 +1,41 @@
+[package]
+name = "minhash-rs"
+version = "0.2.0"
+edition = "2021"
+authors = ["Luca Cappelletti <cappelletti.luca94@gmail.com>"]
+description = "A Rust implementation of MinHash trying to be parsimonious with memory."
+homepage = "https://github.com/LucaCappelletti94/minhash-rs"
+repository = "https://github.com/LucaCappelletti94/minhash-rs"
+readme = "README.md"
+license = "MIT"
+keywords = ["minhash", "probabilistic", "algorithm", "cardinality", "estimation",]
+categories = [
+    "no-std",
+    "algorithms",
+    "science"
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+siphasher = "0.3"
+fnv = "1.0.3"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1.0"
+rayon = "1.5"
+hyperloglog-rs = "0.1"
+indicatif = { version = "0.15", features = ["rayon"] }
+
+[profile.test]
+overflow-checks = true   # Disable integer overflow checks.
+debug = false            # Include debug info.
+debug-assertions = true  # Enables debug assertions.
+opt-level = 3
+
+[profile.release]
+overflow-checks = false   # Disable integer overflow checks.
+debug = false            # Include debug info.
+debug-assertions = false  # Enables debug assertions.
+opt-level = 3

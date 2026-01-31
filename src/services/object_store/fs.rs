@@ -1,11 +1,12 @@
 use std::{io::ErrorKind, path::PathBuf};
 
-use crate::types::traits::object_store::AsyncReadSeek;
+use crate::types::traits::object_store::{AsyncReadSeek, PutResponse};
 use crate::types::{error::AppError, traits::object_store::ObjectStore};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::StreamExt;
 use futures::stream::BoxStream;
+use minhash_rs::prelude::MinHash;
 use tokio::fs::File;
 use tokio::fs::{create_dir_all, read, remove_file, write};
 use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
@@ -27,8 +28,12 @@ impl ObjectStore for FileSystemObjectStore {
     async fn get(&self, key: &str) -> Result<Vec<u8>, AppError> {
         Ok(read(self.path.join(key)).await?)
     }
-    async fn put(&self, key: &str, data: &[u8]) -> Result<(), AppError> {
-        Ok(write(self.path.join(key), data).await?)
+    async fn put(&self, key: &str, data: &[u8]) -> Result<PutResponse, AppError> {
+        write(self.path.join(key), data).await?;
+
+        let mh: MinHash<u64, 128> = data.into_iter().collect();
+
+        Ok(resp)
     }
     async fn delete(&self, key: &str) -> Result<(), AppError> {
         match remove_file(self.path.join(key)).await {

@@ -7,15 +7,19 @@ use tokio::io::{AsyncRead, AsyncSeek};
 pub trait AsyncReadSeek: AsyncRead + AsyncSeek {}
 impl<T: AsyncRead + AsyncSeek + ?Sized> AsyncReadSeek for T {}
 
+pub struct PutResponse {
+    simhash: u64,
+}
+
 #[async_trait]
 pub trait ObjectStore: Send + Sync {
     async fn get(&self, key: &str) -> Result<Vec<u8>, AppError>;
-    async fn put(&self, key: &str, data: &[u8]) -> Result<(), AppError>;
+    async fn put(&self, key: &str, data: &[u8]) -> Result<PutResponse, AppError>;
     async fn put_stream(
         &self,
         key: &str,
         stream: BoxStream<'_, Result<Bytes, AppError>>,
-    ) -> Result<(), AppError>;
+    ) -> Result<PutResponse, AppError>;
     async fn get_stream(
         &self,
         key: &str,
