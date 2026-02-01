@@ -34,7 +34,7 @@ pub struct UrlState {
     // Last observed Last-Modified header value
     pub last_modified: Option<DateTime<Utc>>,
     // SimHash fingerprint of fetched content
-    pub fp_simhash: Option<i64>,
+    pub fp_minhash: Option<Vec<u64>>,
     // EMA of content change events
     pub change_ema: f64,
     // EMA of 404-like responses
@@ -57,7 +57,7 @@ impl Signal for UrlState {
             last_status     smallint,
             etag            text,
             last_modified   timestamp,
-            fp_simhash      bigint,
+            fp_minhash      list<bigint>,
             change_ema      double,
             soft404_ema     double,
             thin_ema        double,
@@ -117,7 +117,7 @@ impl Signal for UrlState {
             self.last_status,
             self.etag.clone(),
             self.last_modified.map(|t| t.naive_utc()),
-            self.fp_simhash,
+            self.fp_minhash.clone(),
             self.change_ema,
             self.soft404_ema,
             self.thin_ema,
