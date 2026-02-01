@@ -132,7 +132,6 @@ mod tests {
     use std::env::temp_dir;
 
     use httpmock::{Method::GET, MockServer};
-    use simhash::simhash;
 
     use crate::{services::object_store::fs::FileSystemObjectStore, utils::web::get_user_agent};
 

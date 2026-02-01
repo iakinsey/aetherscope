@@ -10,6 +10,7 @@ use minhash_rs::prelude::MinHash;
 use tokio::fs::File;
 use tokio::fs::{create_dir_all, read, remove_file, write};
 use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
+use xxhash_rust::xxh3::xxh3_64;
 
 pub struct FileSystemObjectStore {
     path: PathBuf,
@@ -32,9 +33,11 @@ impl ObjectStore for FileSystemObjectStore {
         write(self.path.join(key), data).await?;
 
         let mh: MinHash<u64, 128> = data.into_iter().collect();
+        let digest: Vec<u64> = mh.iter().copied().collect();
 
-        Ok(resp)
+        Ok(PutResponse { minhash: digest })
     }
+
     async fn delete(&self, key: &str) -> Result<(), AppError> {
         match remove_file(self.path.join(key)).await {
             Ok(()) => Ok(()),
@@ -47,18 +50,23 @@ impl ObjectStore for FileSystemObjectStore {
         &self,
         key: &str,
         mut stream: BoxStream<'_, Result<Bytes, AppError>>,
-    ) -> Result<(), AppError> {
+    ) -> Result<PutResponse, AppError> {
         let file = File::create(self.path.join(key)).await?;
         let mut writer = BufWriter::new(file);
+        let mut mh = MinHash::<u64, 128>::new();
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk?;
             writer.write_all(&chunk).await?;
+            update(&mut mh, &chunk);
         }
 
         writer.flush().await?;
-        Ok(())
+        let digest: Vec<u64> = mh.iter().copied().collect();
+
+        Ok(PutResponse { minhash: digest })
     }
+
     async fn get_stream(
         &self,
         key: &str,
@@ -66,6 +74,11 @@ impl ObjectStore for FileSystemObjectStore {
         let file = File::open(self.path.join(key)).await?;
         Ok(Box::new(BufReader::new(file)))
     }
+}
+
+fn update(mh: &mut MinHash<u64, 128>, chunk: &[u8]) {
+    let h = xxh3_64(chunk);
+    mh.insert_with_siphashes13(h);
 }
 
 #[cfg(test)]

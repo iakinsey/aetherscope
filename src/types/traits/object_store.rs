@@ -8,7 +8,7 @@ pub trait AsyncReadSeek: AsyncRead + AsyncSeek {}
 impl<T: AsyncRead + AsyncSeek + ?Sized> AsyncReadSeek for T {}
 
 pub struct PutResponse {
-    simhash: u64,
+    pub minhash: Vec<u64>,
 }
 
 #[async_trait]

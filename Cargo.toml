@@ -28,6 +28,7 @@ chrono = "0.4.43"
 xxhrs = "2.0.1"
 psl = "2.1.183"
 minhash-rs = "0.2.0"
+xxhash-rust = "0.8.15"
 
 [dev-dependencies]
 httpmock = "0.8.2"
