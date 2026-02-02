@@ -76,8 +76,7 @@ impl<'a> HttpFetcher<'a> {
 
         let stream = resp.bytes_stream().map_err(AppError::from).boxed();
         let key = Uuid::new_v4().to_string();
-
-        self.object_store.put_stream(&key, stream).await?;
+        let put_resp = self.object_store.put_stream(&key, stream).await?;
 
         Ok(HttpResponse {
             request: HttpRequest {
@@ -90,6 +89,7 @@ impl<'a> HttpFetcher<'a> {
             key: Some(key),
             error: None,
             timestamp: Some(response_timestamp),
+            minhash: Some(put_resp.minhash),
         })
     }
 }
@@ -114,6 +114,7 @@ impl<'a> Task for HttpFetcher<'a> {
                 key: None,
                 error: Some(e.to_string()),
                 timestamp: None,
+                minhash: None,
             },
         };
         let mut metadata = message.metadata;

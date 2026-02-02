@@ -178,6 +178,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                             response_headers: HashMap::new(),
                             key: None,
                             error: Some("Request failed".to_string()),
+                            minhash: None,
                         });
                     }
 
@@ -233,6 +234,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                             response_headers: HashMap::new(),
                             key: None,
                             error: Some(e.error_text.clone()),
+                            minhash: None,
                         });
                     }
                 }
@@ -246,10 +248,13 @@ impl<'a> HeadlessBrowserFetcher<'a> {
         let request_headers = headers_to_hashmap(request_headers);
         let response_headers = headers_to_hashmap(response_headers);
         let mut key: Option<String> = None;
+        let mut minhash: Option<Vec<u64>> = None;
 
         if let Some(body) = body {
             let storage_key = Uuid::new_v4().to_string();
-            object_store.put(&storage_key, &body).await?;
+            let resp = object_store.put(&storage_key, &body).await?;
+
+            minhash = Some(resp.minhash);
             key = Some(storage_key);
         }
 
@@ -264,6 +269,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
             timestamp: response_timestamp,
             key,
             error: None,
+            minhash: minhash,
         })
     }
 }
@@ -316,6 +322,7 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
                 key: None,
                 error: Some(e.to_string()),
                 timestamp: None,
+                minhash: None,
             },
         };
         let mut metadata = message.metadata;

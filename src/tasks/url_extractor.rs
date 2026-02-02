@@ -106,6 +106,7 @@ mod tests {
             key: Some(key),
             error: None,
             timestamp: None,
+            minhash: None,
         };
 
         dependencies()

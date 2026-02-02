@@ -17,4 +17,5 @@ pub struct HttpResponse {
     pub key: Option<String>,
     pub error: Option<String>,
     pub timestamp: Option<DateTime<Utc>>,
+    pub minhash: Option<Vec<u64>>,
 }

@@ -75,7 +75,7 @@ impl Signal for UrlState {
             last_status,
             etag,
             last_modified,
-            fp_simhash,
+            fp_minhash,
             change_ema,
             soft404_ema,
             thin_ema,
