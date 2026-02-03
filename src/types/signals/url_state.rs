@@ -1,5 +1,6 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
+use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use url::Url;
@@ -9,7 +10,7 @@ use crate::{
     types::{
         error::AppError,
         structs::record::{Record, RecordMetadata},
-        traits::signal::Signal,
+        traits::signal::{DbSession, Signal},
     },
     utils::web::{extract_host, extract_site},
 };
@@ -47,6 +48,79 @@ pub struct UrlState {
     pub bytes_ema: f64,
 }
 
+impl UrlState {
+    pub async fn get_latest(
+        session: Arc<DbSession>,
+        url_key: Vec<u8>,
+        host_key: Vec<u8>,
+        site_key: Vec<u8>,
+    ) -> Result<Option<Self>, AppError> {
+        const Q: &str = r#"
+            SELECT
+                last_fetch_ts,
+                last_status,
+                etag,
+                last_modified,
+                fp_minhash,
+                change_ema,
+                soft404_ema,
+                thin_ema,
+                latency_ms_ema,
+                bytes_ema
+            FROM url_state
+            WHERE url_key = ?
+        "#;
+
+        let prepared = session.prepare(Q).await?;
+        let result = session
+            .exec_with_values(&prepared, query_values!(url_key.clone()))
+            .await?;
+
+        let row = match result.response_body()?.into_rows() {
+            Some(mut rows) if !rows.is_empty() => rows.remove(0),
+            _ => return Ok(None),
+        };
+
+        let last_fetch_ts: Option<DateTime<Utc>> = row.get_by_name("last_fetch_ts")?;
+        let last_status: Option<i16> = row.get_by_name("last_status")?;
+        let etag: Option<String> = row.get_by_name("etag")?;
+        let last_modified: Option<DateTime<Utc>> = row.get_by_name("last_modified")?;
+
+        let fp_minhash: Option<Vec<u64>> = {
+            let s: Option<String> = row.get_by_name("fp_minhash")?;
+
+            s.map(|txt| {
+                txt.split(',')
+                    .filter(|x| !x.is_empty())
+                    .map(|x| x.parse::<u64>().unwrap())
+                    .collect()
+            })
+        };
+
+        let change_ema: Option<f64> = row.get_by_name("change_ema")?;
+        let soft404_ema: Option<f64> = row.get_by_name("soft404_ema")?;
+        let thin_ema: Option<f64> = row.get_by_name("thin_ema")?;
+        let latency_ms_ema: Option<f64> = row.get_by_name("latency_ms_ema")?;
+        let bytes_ema: Option<f64> = row.get_by_name("bytes_ema")?;
+
+        Ok(Some(Self {
+            url_key,
+            host_key,
+            site_key,
+            last_fetch_ts: last_fetch_ts.unwrap_or_else(Utc::now),
+            last_status: last_status.unwrap_or(0),
+            etag,
+            last_modified,
+            fp_minhash,
+            change_ema: change_ema.unwrap_or(0.0),
+            soft404_ema: soft404_ema.unwrap_or(0.0),
+            thin_ema: thin_ema.unwrap_or(0.0),
+            latency_ms_ema: latency_ms_ema.unwrap_or(0.0),
+            bytes_ema: bytes_ema.unwrap_or(0.0),
+        }))
+    }
+}
+
 impl Signal for UrlState {
     const CREATE_TABLE_QUERY: &'static str = r#"
         CREATE TABLE IF NOT EXISTS url_state (
@@ -57,7 +131,7 @@ impl Signal for UrlState {
             last_status     smallint,
             etag            text,
             last_modified   timestamp,
-            fp_minhash      list<bigint>,
+            fp_minhash      text,
             change_ema      double,
             soft404_ema     double,
             thin_ema        double,
@@ -103,6 +177,7 @@ impl Signal for UrlState {
             let last_status = resp.status;
             let etag = resp.response_headers.get("Etag");
             let last_modified = resp.response_headers.get("Last-Modified");
+            let fp_minhash = resp.minhash;
         }
 
         unimplemented!();
