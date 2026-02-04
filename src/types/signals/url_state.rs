@@ -158,7 +158,7 @@ impl Signal for UrlState {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     "#;
 
-    fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
+    async fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
         let url = Url::from_str(&record.uri)?;
         let site = extract_site(&url)?;
         let host = extract_host(&url)?;
@@ -166,7 +166,7 @@ impl Signal for UrlState {
         let url_key = XXH3_128::hash(record.uri.as_bytes()).to_be_bytes().to_vec();
         let host_key = XXH3_128::hash(host.as_bytes()).to_be_bytes().to_vec();
         let site_key = XXH3_128::hash(site.as_bytes()).to_be_bytes().to_vec();
-        //let last_fetch_ts = record
+        let latest = Self::get_latest(session, url_key, host_key, site_key).await?;
 
         for m in record.metadata {
             let RecordMetadata::HttpResponse(resp) = m else {

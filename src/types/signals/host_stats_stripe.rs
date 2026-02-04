@@ -77,7 +77,7 @@ impl Signal for HostStatsStripe {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     "#;
 
-    fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
+    async fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
         unimplemented!()
     }
 
