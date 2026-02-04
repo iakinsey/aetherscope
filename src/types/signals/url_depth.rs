@@ -1,7 +1,13 @@
+use std::sync::Arc;
+
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
-use crate::types::{error::AppError, structs::record::Record, traits::signal::Signal};
+use crate::types::{
+    error::AppError,
+    structs::record::Record,
+    traits::signal::{DbSession, Signal},
+};
 
 // Discovery depth metadata for a URL.
 // Records how far a URL is from initial seeds and when it was first seen.
@@ -30,7 +36,7 @@ impl Signal for UrlDepth {
         ) VALUES (?, ?, ?)
     "#;
 
-    fn from_record(record: Record) -> Result<Vec<Self>, AppError> {
+    fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
         unimplemented!()
     }
 

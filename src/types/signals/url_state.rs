@@ -158,7 +158,7 @@ impl Signal for UrlState {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     "#;
 
-    fn from_record(record: Record) -> Result<Vec<Self>, AppError> {
+    fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
         let url = Url::from_str(&record.uri)?;
         let site = extract_site(&url)?;
         let host = extract_host(&url)?;

@@ -1,7 +1,13 @@
+use std::sync::Arc;
+
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
-use crate::types::{error::AppError, structs::record::Record, traits::signal::Signal};
+use crate::types::{
+    error::AppError,
+    structs::record::Record,
+    traits::signal::{DbSession, Signal},
+};
 
 // Aggregated inlink-based importance signals.
 // Stores EMA-style authority for URLs, hosts, or sites,
@@ -40,7 +46,7 @@ impl Signal for InlinkAgg {
         ) VALUES (?, ?, ?, ?, ?)
     "#;
 
-    fn from_record(record: Record) -> Result<Vec<Self>, AppError> {
+    fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
         unimplemented!()
     }
 

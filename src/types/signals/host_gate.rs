@@ -1,7 +1,13 @@
+use std::sync::Arc;
+
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
-use crate::types::{error::AppError, structs::record::Record, traits::signal::Signal};
+use crate::types::{
+    error::AppError,
+    structs::record::Record,
+    traits::signal::{DbSession, Signal},
+};
 
 // Per-host politeness and scheduling gate.
 // Enforces crawl delays and exclusive fetch leases so that
@@ -34,7 +40,7 @@ impl Signal for HostGate {
         ) VALUES (?, ?, ?, ?)
     "#;
 
-    fn from_record(record: Record) -> Result<Vec<Self>, AppError> {
+    fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
         unimplemented!()
     }
 
