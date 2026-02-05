@@ -54,7 +54,7 @@ impl UrlState {
         url_key: Vec<u8>,
         host_key: Vec<u8>,
         site_key: Vec<u8>,
-    ) -> Result<Option<Self>, AppError> {
+    ) -> Result<Self, AppError> {
         const Q: &str = r#"
             SELECT
                 last_fetch_ts,
@@ -78,7 +78,23 @@ impl UrlState {
 
         let row = match result.response_body()?.into_rows() {
             Some(mut rows) if !rows.is_empty() => rows.remove(0),
-            _ => return Ok(None),
+            _ => {
+                return Ok(UrlState {
+                    url_key,
+                    host_key,
+                    site_key,
+                    last_fetch_ts: Utc::now(),
+                    last_status: 0,
+                    etag: None,
+                    last_modified: None,
+                    fp_minhash: None,
+                    change_ema: 0.0,
+                    soft404_ema: 0.0,
+                    thin_ema: 0.0,
+                    latency_ms_ema: 0.0,
+                    bytes_ema: 0.0,
+                });
+            }
         };
 
         let last_fetch_ts: Option<DateTime<Utc>> = row.get_by_name("last_fetch_ts")?;
@@ -103,7 +119,7 @@ impl UrlState {
         let latency_ms_ema: Option<f64> = row.get_by_name("latency_ms_ema")?;
         let bytes_ema: Option<f64> = row.get_by_name("bytes_ema")?;
 
-        Ok(Some(Self {
+        Ok(Self {
             url_key,
             host_key,
             site_key,
@@ -117,7 +133,7 @@ impl UrlState {
             thin_ema: thin_ema.unwrap_or(0.0),
             latency_ms_ema: latency_ms_ema.unwrap_or(0.0),
             bytes_ema: bytes_ema.unwrap_or(0.0),
-        }))
+        })
     }
 }
 
