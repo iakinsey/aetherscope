@@ -49,6 +49,20 @@ pub struct UrlState {
 }
 
 impl UrlState {
+    fn get_change_ema(
+        prev_ema: f64,
+        prev_ts: DateTime<Utc>,
+        now_ts: DateTime<Utc>,
+        changed: bool,
+        tau_seconds: f64,
+    ) -> f64 {
+        let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
+        let decay = (-dt / tau_seconds).exp();
+        let x = if changed { 1.0 } else { 0.0 };
+
+        prev_ema * decay + x * (1.0 - decay)
+    }
+
     pub async fn get_latest(
         session: Arc<DbSession>,
         url_key: Vec<u8>,
@@ -194,6 +208,23 @@ impl Signal for UrlState {
             let etag = resp.response_headers.get("Etag");
             let last_modified = resp.response_headers.get("Last-Modified");
             let fp_minhash = resp.minhash;
+
+            let changed = latest
+                .fp_minhash
+                .as_ref()
+                .map(|old| Some(old) != fp_minhash.as_ref())
+                .unwrap_or(true);
+
+            let change_ema = match last_fetch_ts {
+                Some(now_ts) => Self::get_change_ema(
+                    latest.change_ema,
+                    latest.last_fetch_ts, // already DateTime<Utc>
+                    now_ts,
+                    changed,
+                    14.0 * 24.0 * 3600.0,
+                ),
+                None => latest.change_ema,
+            };
         }
 
         unimplemented!();
