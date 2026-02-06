@@ -1,11 +1,14 @@
-use std::net::IpAddr;
+use std::{net::IpAddr, sync::Arc};
 
 use bytes::Bytes;
 use psl::{domain, domain_str};
 use reqwest::Client;
 use url::{ParseError, Url};
 
-use crate::types::error::AppError;
+use crate::types::{
+    error::AppError, structs::metadata::http_response::HttpResponse,
+    traits::object_store::ObjectStore,
+};
 
 pub fn get_user_agent(user_agent: Option<String>) -> String {
     if let Some(user_agent) = user_agent {
@@ -155,6 +158,15 @@ pub fn extract_site(url: &Url) -> Result<String, AppError> {
     let etld_plus_one = domain_str(host).unwrap_or(host);
 
     Ok(etld_plus_one.to_string())
+}
+
+pub async fn is_soft404(
+    object_store: Arc<dyn ObjectStore>,
+    resp: HttpResponse,
+) -> Result<bool, AppError> {
+    // TODO start here next, develop FSM that can detect attributes indicating a soft 404
+    // You will need to update the FSM system
+    unimplemented!()
 }
 
 #[cfg(test)]
