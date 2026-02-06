@@ -218,7 +218,7 @@ impl Signal for UrlState {
             let change_ema = match last_fetch_ts {
                 Some(now_ts) => Self::get_change_ema(
                     latest.change_ema,
-                    latest.last_fetch_ts, // already DateTime<Utc>
+                    latest.last_fetch_ts,
                     now_ts,
                     changed,
                     14.0 * 24.0 * 3600.0,
