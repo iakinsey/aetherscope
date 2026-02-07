@@ -12,7 +12,7 @@ use crate::{
         },
         traits::{object_store::ObjectStore, task::Task},
     },
-    utils::{dependencies::dependencies, fsm::UriExtractorFSM},
+    utils::{dependencies::dependencies, fsm::url_fsm::UriExtractorFSM},
 };
 
 pub struct UrlExtractor<'a> {

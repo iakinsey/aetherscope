@@ -381,7 +381,7 @@ impl UriExtractorFSM {
 mod tests {
     use std::io::Cursor;
 
-    use crate::{types::traits::object_store::AsyncReadSeek, utils::fsm::UriExtractorFSM};
+    use crate::{types::traits::object_store::AsyncReadSeek, utils::fsm::url_fsm::UriExtractorFSM};
 
     fn reader_from_static_str(s: &'static str) -> Box<dyn AsyncReadSeek + Send + Unpin + 'static> {
         Box::new(Cursor::new(s.as_bytes()))
