@@ -134,4 +134,17 @@ impl StreamReader {
             }
         }
     }
+    pub async fn get_until_term(&mut self, term_chars: &HashSet<char>) -> Result<String, AppError> {
+        let mut result = vec![];
+
+        loop {
+            let next = self.read_char().await?;
+
+            if term_chars.contains(&next) {
+                return Ok(String::from_iter(result));
+            }
+
+            result.push(next);
+        }
+    }
 }

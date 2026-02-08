@@ -1,4 +1,4 @@
-use std::{io::ErrorKind, sync::OnceLock};
+use std::{collections::HashSet, io::ErrorKind, sync::OnceLock};
 
 use crate::{types::error::AppError, utils::fsm::stream_reader::StreamReader};
 
@@ -6,12 +6,18 @@ use crate::{types::error::AppError, utils::fsm::stream_reader::StreamReader};
 pub enum TitleParseState {
     FindTag,
     ReadHtmlTag,
+    ReadTitle,
     Terminate,
 }
 
 static TITLE: OnceLock<Vec<char>> = OnceLock::new();
 fn title() -> &'static [char] {
     TITLE.get_or_init(|| vec!['t', 'i', 't', 'l', 'e', '>'])
+}
+
+static TAG_TERM: OnceLock<HashSet<char>> = OnceLock::new();
+fn tag_term() -> &'static HashSet<char> {
+    TAG_TERM.get_or_init(|| ['<', '>'].into_iter().collect())
 }
 
 pub struct TitleExtractorFSM {
@@ -52,6 +58,10 @@ impl TitleExtractorFSM {
                 self.state = TitleParseState::FindTag;
                 self.read_html_tag().await
             }
+            TitleParseState::ReadTitle => {
+                self.state = TitleParseState::FindTag;
+                self.read_title().await
+            }
             TitleParseState::Terminate => Ok(()),
         }
     }
@@ -71,10 +81,16 @@ impl TitleExtractorFSM {
             return Ok(());
         }
 
-        if !self.reader.read_until_match(title(), '>', true).await? {
-            return Ok(());
+        if !self.reader.read_until_match(title(), '<', true).await? {
+            self.state = TitleParseState::ReadTitle;
         }
 
-        unimplemented!()
+        return Ok(());
+    }
+
+    async fn read_title(&mut self) -> Result<(), AppError> {
+        self.title = self.reader.get_until_term(tag_term()).await?;
+
+        Ok(())
     }
 }
