@@ -19,6 +19,7 @@ impl StreamReader {
         loop {
             let mut b = [0u8; 1];
             self.buf.read_exact(&mut b).await?;
+
             buf[len] = b[0];
             len += 1;
 

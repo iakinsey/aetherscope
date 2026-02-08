@@ -9,8 +9,7 @@ pub enum TitleParseState {
     ReadTitle,
     Terminate,
 }
-// TODO terminate if you see the end of head
-// TODO terminate if you exceed a number of bytes, somewhere in the 4kb range
+
 static TITLE: OnceLock<Vec<char>> = OnceLock::new();
 fn title() -> &'static [char] {
     TITLE.get_or_init(|| vec!['t', 'i', 't', 'l', 'e', '>'])
@@ -39,7 +38,7 @@ impl TitleExtractorFSM {
     }
 
     pub async fn perform(mut self) -> Result<String, AppError> {
-        while self.state != TitleParseState::Terminate {
+        while self.state != TitleParseState::Terminate && self.reader.position().await? < 4096 {
             match self.next().await {
                 Ok(_) => continue,
                 Err(AppError::IOError(e)) if e.kind() == ErrorKind::UnexpectedEof => {
@@ -192,5 +191,19 @@ mod tests {
         let title = fsm.perform().await.unwrap();
 
         assert_eq!("Deep Title", title);
+    }
+
+    #[tokio::test]
+    async fn title_beyond_buffer_limit_is_not_detected() {
+        let mut html = String::new();
+        html.push_str("<html><body>");
+        html.push_str(&"A".repeat(4100));
+        html.push_str("<title>Late Title</title></body></html>");
+
+        let fsm = TitleExtractorFSM::new(reader_from_static_str(Box::leak(html.into_boxed_str())))
+            .unwrap();
+        let title = fsm.perform().await.unwrap();
+
+        assert_eq!("", title);
     }
 }
