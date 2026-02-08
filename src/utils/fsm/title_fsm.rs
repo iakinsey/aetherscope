@@ -87,6 +87,7 @@ impl TitleExtractorFSM {
 
     async fn read_title(&mut self) -> Result<(), AppError> {
         self.title = self.reader.get_until_term(tag_term()).await?;
+        self.state = TitleParseState::Terminate;
 
         Ok(())
     }
