@@ -5,9 +5,12 @@ use psl::{domain, domain_str};
 use reqwest::Client;
 use url::{ParseError, Url};
 
-use crate::types::{
-    error::AppError, structs::metadata::http_response::HttpResponse,
-    traits::object_store::ObjectStore,
+use crate::{
+    types::{
+        error::AppError, structs::metadata::http_response::HttpResponse,
+        traits::object_store::ObjectStore,
+    },
+    utils::fsm::title_fsm::TitleExtractorFSM,
 };
 
 pub fn get_user_agent(user_agent: Option<String>) -> String {
@@ -164,9 +167,59 @@ pub async fn is_soft404(
     object_store: Arc<dyn ObjectStore>,
     resp: HttpResponse,
 ) -> Result<bool, AppError> {
-    // TODO start here next, develop FSM that can detect attributes indicating a soft 404
-    // You will need to update the FSM system
-    unimplemented!()
+    // Match against status
+    match resp.status {
+        Some(404) | Some(410) => return Ok(false),
+        Some(200) => {}
+        _ => return Ok(false),
+    }
+
+    // Unable to judge if no body
+    let key = match resp.key {
+        Some(v) => v,
+        None => return Ok(false),
+    };
+
+    // Process title
+    let buf = object_store.get_stream(&key).await?;
+    let extractor = TitleExtractorFSM::new(buf)?;
+    let title = extractor.perform().await?;
+    let title_lc = title.to_ascii_lowercase();
+
+    if title_lc.contains("not found")
+        || title_lc.contains("404")
+        || title_lc.contains("error")
+        || title_lc.contains("page missing")
+        || title_lc.contains("no results")
+    {
+        return Ok(true);
+    }
+
+    // Very small pages are usually stubs
+    if let Some(v) = resp.response_headers.get("content-length") {
+        if let Ok(len) = v.parse::<u64>() {
+            if len < 512 {
+                return Ok(true);
+            }
+        }
+    }
+
+    // Status 200 with explicit cache headers for errors
+    if let Some(cache) = resp.response_headers.get("cache-control") {
+        let c = cache.to_ascii_lowercase();
+        if c.contains("no-cache") && c.contains("must-revalidate") {
+            return Ok(true);
+        }
+    }
+
+    // Suspicious if the page has a fingerprint but no title and tiny headers
+    if let Some(fp) = &resp.minhash {
+        if fp.is_empty() {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 #[cfg(test)]
