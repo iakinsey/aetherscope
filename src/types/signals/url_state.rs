@@ -6,6 +6,8 @@ use chrono::{DateTime, Utc};
 use url::Url;
 use xxhrs::XXH3_128;
 
+use crate::types::traits::object_store::ObjectStore;
+use crate::utils::web::is_soft404;
 use crate::{
     types::{
         error::AppError,
@@ -46,6 +48,20 @@ pub struct UrlState {
     pub latency_ms_ema: f64,
     // EMA of byte response size
     pub bytes_ema: f64,
+}
+
+fn update_soft404_ema(
+    prev_ema: f64,
+    prev_ts: DateTime<Utc>,
+    now_ts: DateTime<Utc>,
+    soft404: bool,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+    let x = if soft404 { 1.0 } else { 0.0 };
+
+    prev_ema * decay + x * (1.0 - decay)
 }
 
 impl UrlState {
@@ -188,7 +204,11 @@ impl Signal for UrlState {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     "#;
 
-    async fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
+    async fn from_record(
+        session: Arc<DbSession>,
+        object_store: Arc<dyn ObjectStore>,
+        record: Record,
+    ) -> Result<Vec<Self>, AppError> {
         let url = Url::from_str(&record.uri)?;
         let site = extract_site(&url)?;
         let host = extract_host(&url)?;
@@ -202,6 +222,7 @@ impl Signal for UrlState {
             let RecordMetadata::HttpResponse(resp) = m else {
                 continue;
             };
+            let soft_resp = resp.clone();
 
             let last_fetch_ts = resp.timestamp;
             let last_status = resp.status;
@@ -224,6 +245,18 @@ impl Signal for UrlState {
                     14.0 * 24.0 * 3600.0,
                 ),
                 None => latest.change_ema,
+            };
+
+            let soft404 = is_soft404(object_store.clone(), &soft_resp).await?;
+            let soft404_ema = match resp.timestamp {
+                Some(now_ts) => update_soft404_ema(
+                    latest.soft404_ema,
+                    latest.last_fetch_ts,
+                    now_ts,
+                    soft404,
+                    30.0 * 24.0 * 3600.0,
+                ),
+                None => latest.soft404_ema,
             };
         }
 

@@ -6,7 +6,10 @@ use chrono::{DateTime, Utc};
 use crate::types::{
     error::AppError,
     structs::record::Record,
-    traits::signal::{DbSession, Signal},
+    traits::{
+        object_store::ObjectStore,
+        signal::{DbSession, Signal},
+    },
 };
 
 // Static or slowly changing authority prior per site.
@@ -36,7 +39,11 @@ impl Signal for DomainAuthorityPrior {
         ) VALUES (?, ?, ?)
     "#;
 
-    async fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError> {
+    async fn from_record(
+        session: Arc<DbSession>,
+        object_store: Arc<dyn ObjectStore>,
+        record: Record,
+    ) -> Result<Vec<Self>, AppError> {
         unimplemented!()
     }
 

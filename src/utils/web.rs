@@ -165,7 +165,7 @@ pub fn extract_site(url: &Url) -> Result<String, AppError> {
 
 pub async fn is_soft404(
     object_store: Arc<dyn ObjectStore>,
-    resp: HttpResponse,
+    resp: &HttpResponse,
 ) -> Result<bool, AppError> {
     // Match against status
     match resp.status {
@@ -175,7 +175,7 @@ pub async fn is_soft404(
     }
 
     // Unable to judge if no body
-    let key = match resp.key {
+    let key = match &resp.key {
         Some(v) => v,
         None => return Ok(false),
     };

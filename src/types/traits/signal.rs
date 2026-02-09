@@ -7,7 +7,7 @@ use cdrs_tokio::{
     transport::TransportTcp,
 };
 
-use crate::types::{error::AppError, structs::record::Record};
+use crate::types::{error::AppError, structs::record::Record, traits::object_store::ObjectStore};
 
 pub type DbSession = Session<
     TransportTcp,
@@ -19,7 +19,11 @@ pub trait Signal: Sized + Send + Sync {
     const CREATE_TABLE_QUERY: &'static str;
     const UPSERT_QUERY: &'static str;
 
-    async fn from_record(session: Arc<DbSession>, record: Record) -> Result<Vec<Self>, AppError>;
+    async fn from_record(
+        session: Arc<DbSession>,
+        object_store: Arc<dyn ObjectStore>,
+        record: Record,
+    ) -> Result<Vec<Self>, AppError>;
 
     fn bind_values(&self) -> QueryValues;
 
