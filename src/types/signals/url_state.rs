@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use url::Url;
 use xxhrs::XXH3_128;
 
+use crate::types::structs::metadata::http_response::HttpResponse;
 use crate::types::traits::object_store::ObjectStore;
 use crate::utils::web::is_soft404;
 use crate::{
@@ -60,6 +61,21 @@ fn update_soft404_ema(
     let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
     let decay = (-dt / tau_seconds).exp();
     let x = if soft404 { 1.0 } else { 0.0 };
+
+    prev_ema * decay + x * (1.0 - decay)
+}
+
+fn update_thin_ema(
+    prev_ema: f64,
+    prev_ts: DateTime<Utc>,
+    now_ts: DateTime<Utc>,
+    thin: bool,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+
+    let x = if thin { 1.0 } else { 0.0 };
 
     prev_ema * decay + x * (1.0 - decay)
 }
@@ -257,6 +273,18 @@ impl Signal for UrlState {
                     30.0 * 24.0 * 3600.0,
                 ),
                 None => latest.soft404_ema,
+            };
+            //let thin = is_thin(&resp, &title, body_bytes);
+
+            let thin_ema = match resp.timestamp {
+                Some(now_ts) => update_thin_ema(
+                    latest.thin_ema,
+                    latest.last_fetch_ts,
+                    now_ts,
+                    thin,
+                    21.0 * 24.0 * 3600.0,
+                ),
+                None => latest.thin_ema,
             };
         }
 

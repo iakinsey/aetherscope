@@ -7,7 +7,7 @@ use bytes::Bytes;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use minhash_rs::prelude::MinHash;
-use tokio::fs::File;
+use tokio::fs::{File, metadata};
 use tokio::fs::{create_dir_all, read, remove_file, write};
 use tokio::io::{AsyncWriteExt, BufReader, BufWriter};
 use xxhash_rust::xxh3::xxh3_64;
@@ -73,6 +73,11 @@ impl ObjectStore for FileSystemObjectStore {
     ) -> Result<Box<dyn AsyncReadSeek + Send + Unpin>, AppError> {
         let file = File::open(self.path.join(key)).await?;
         Ok(Box::new(BufReader::new(file)))
+    }
+
+    async fn get_size(&self, key: &str) -> Result<u64, AppError> {
+        let path = self.path.join(key);
+        Ok(metadata(path).await?.len())
     }
 }
 

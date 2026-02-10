@@ -25,4 +25,5 @@ pub trait ObjectStore: Send + Sync {
         key: &str,
     ) -> Result<Box<dyn AsyncReadSeek + Send + Unpin>, AppError>;
     async fn delete(&self, key: &str) -> Result<(), AppError>;
+    async fn get_size(&self, key: &str) -> Result<u64, AppError>;
 }
