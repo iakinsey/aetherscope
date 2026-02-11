@@ -163,28 +163,40 @@ pub fn extract_site(url: &Url) -> Result<String, AppError> {
     Ok(etld_plus_one.to_string())
 }
 
-pub async fn is_soft404(
+pub struct HttpPageAssessment {
+    pub soft404: bool,
+    pub byte_size: u64,
+    pub title: String,
+}
+
+pub async fn extract_page_state_details(
     object_store: Arc<dyn ObjectStore>,
     resp: &HttpResponse,
-) -> Result<bool, AppError> {
-    // Match against status
-    match resp.status {
-        Some(404) | Some(410) => return Ok(false),
-        Some(200) => {}
-        _ => return Ok(false),
-    }
-
-    // Unable to judge if no body
-    let key = match &resp.key {
-        Some(v) => v,
-        None => return Ok(false),
+) -> Result<HttpPageAssessment, AppError> {
+    let mut result = HttpPageAssessment {
+        soft404: false,
+        byte_size: 0,
+        title: String::new(),
     };
 
-    // Process title
+    match resp.status {
+        Some(404) | Some(410) => return Ok(result),
+        Some(200) => {}
+        _ => return Ok(result),
+    }
+
+    let key = match &resp.key {
+        Some(v) => v,
+        None => return Ok(result),
+    };
+
+    result.byte_size = object_store.get_size(key).await?;
+
     let buf = object_store.get_stream(&key).await?;
     let extractor = TitleExtractorFSM::new(buf)?;
     let title = extractor.perform().await?;
     let title_lc = title.to_ascii_lowercase();
+    result.title = title;
 
     if title_lc.contains("not found")
         || title_lc.contains("404")
@@ -192,34 +204,35 @@ pub async fn is_soft404(
         || title_lc.contains("page missing")
         || title_lc.contains("no results")
     {
-        return Ok(true);
+        result.soft404 = true;
+        return Ok(result);
     }
 
-    // Very small pages are usually stubs
     if let Some(v) = resp.response_headers.get("content-length") {
         if let Ok(len) = v.parse::<u64>() {
             if len < 512 {
-                return Ok(true);
+                result.soft404 = true;
+                return Ok(result);
             }
         }
     }
 
-    // Status 200 with explicit cache headers for errors
     if let Some(cache) = resp.response_headers.get("cache-control") {
         let c = cache.to_ascii_lowercase();
         if c.contains("no-cache") && c.contains("must-revalidate") {
-            return Ok(true);
+            result.soft404 = true;
+            return Ok(result);
         }
     }
 
-    // Suspicious if the page has a fingerprint but no title and tiny headers
     if let Some(fp) = &resp.minhash {
         if fp.is_empty() {
-            return Ok(true);
+            result.soft404 = true;
+            return Ok(result);
         }
     }
 
-    Ok(false)
+    Ok(result)
 }
 
 #[cfg(test)]

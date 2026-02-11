@@ -8,7 +8,7 @@ use xxhrs::XXH3_128;
 
 use crate::types::structs::metadata::http_response::HttpResponse;
 use crate::types::traits::object_store::ObjectStore;
-use crate::utils::web::is_soft404;
+use crate::utils::web::extract_page_state_details;
 use crate::{
     types::{
         error::AppError,
@@ -78,6 +78,25 @@ fn update_thin_ema(
     let x = if thin { 1.0 } else { 0.0 };
 
     prev_ema * decay + x * (1.0 - decay)
+}
+
+fn is_thin(resp: &HttpResponse, title: &str, body_bytes: u64) -> bool {
+    // Tiny bodies
+    if body_bytes < 800 {
+        return true;
+    }
+
+    // Title-only pages
+    if title.len() < 10 {
+        return true;
+    }
+
+    // Redirect-like pages masquerading as 200
+    if resp.status == Some(200) && resp.response_headers.contains_key("location") {
+        return true;
+    }
+
+    false
 }
 
 impl UrlState {
@@ -263,7 +282,8 @@ impl Signal for UrlState {
                 None => latest.change_ema,
             };
 
-            let soft404 = is_soft404(object_store.clone(), &soft_resp).await?;
+            let page_details = extract_page_state_details(object_store.clone(), &soft_resp).await?;
+            let soft404 = page_details.soft404;
             let soft404_ema = match resp.timestamp {
                 Some(now_ts) => update_soft404_ema(
                     latest.soft404_ema,
@@ -274,7 +294,8 @@ impl Signal for UrlState {
                 ),
                 None => latest.soft404_ema,
             };
-            //let thin = is_thin(&resp, &title, body_bytes);
+
+            let thin = is_thin(&soft_resp, &page_details.title, page_details.byte_size);
 
             let thin_ema = match resp.timestamp {
                 Some(now_ts) => update_thin_ema(
