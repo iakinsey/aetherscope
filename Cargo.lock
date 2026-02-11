@@ -22,6 +22,7 @@ dependencies = [
  "fastpool",
  "futures",
  "futures-util",
+ "httpdate",
  "httpmock",
  "minhash-rs",
  "psl",

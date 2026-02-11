@@ -3,6 +3,7 @@ use std::{str::FromStr, sync::Arc};
 use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
+use httpdate::parse_http_date;
 use url::Url;
 use xxhrs::XXH3_128;
 
@@ -97,6 +98,33 @@ fn is_thin(resp: &HttpResponse, title: &str, body_bytes: u64) -> bool {
     }
 
     false
+}
+
+fn update_latency_ema(
+    prev_ema: f64,
+    prev_ts: DateTime<Utc>,
+    now_ts: DateTime<Utc>,
+    latency_ms: f64,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
+
+    let decay = (-dt / tau_seconds).exp();
+
+    prev_ema * decay + latency_ms * (1.0 - decay)
+}
+
+fn update_bytes_ema(
+    prev_ema: f64,
+    prev_ts: DateTime<Utc>,
+    now_ts: DateTime<Utc>,
+    bytes: u64,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+
+    prev_ema * decay + (bytes as f64) * (1.0 - decay)
 }
 
 impl UrlState {
@@ -247,23 +275,30 @@ impl Signal for UrlState {
         let url = Url::from_str(&record.uri)?;
         let site = extract_site(&url)?;
         let host = extract_host(&url)?;
-
         let url_key = XXH3_128::hash(record.uri.as_bytes()).to_be_bytes().to_vec();
         let host_key = XXH3_128::hash(host.as_bytes()).to_be_bytes().to_vec();
         let site_key = XXH3_128::hash(site.as_bytes()).to_be_bytes().to_vec();
-        let latest = Self::get_latest(session, url_key, host_key, site_key).await?;
+        let latest =
+            Self::get_latest(session, url_key.clone(), host_key.clone(), site_key.clone()).await?;
+        let mut results = vec![];
 
         for m in record.metadata {
             let RecordMetadata::HttpResponse(resp) = m else {
                 continue;
             };
             let soft_resp = resp.clone();
-
             let last_fetch_ts = resp.timestamp;
             let last_status = resp.status;
-            let etag = resp.response_headers.get("Etag");
+            let etag = resp.response_headers.get("Etag").cloned();
             let last_modified = resp.response_headers.get("Last-Modified");
-            let fp_minhash = resp.minhash;
+            let last_modified: Option<DateTime<Utc>> = match last_modified {
+                Some(t) => Some(parse_http_date(t)?.into()),
+                None => None,
+            };
+            let fp_minhash: Option<Vec<u64>> = resp.minhash;
+            let latency_ms: Option<i64> = resp
+                .timestamp
+                .map(|t| (t - resp.request.timestamp).num_milliseconds());
 
             let changed = latest
                 .fp_minhash
@@ -307,9 +342,52 @@ impl Signal for UrlState {
                 ),
                 None => latest.thin_ema,
             };
+
+            let latency_ms = match latency_ms {
+                Some(ms) => ms as f64,
+                None => 30_000.0,
+            };
+
+            let latency_ms_ema = match resp.timestamp {
+                Some(now_ts) => update_latency_ema(
+                    latest.latency_ms_ema,
+                    latest.last_fetch_ts,
+                    now_ts,
+                    latency_ms,
+                    6.0 * 3600.0,
+                ),
+                None => latest.latency_ms_ema,
+            };
+
+            let bytes_ema = match resp.timestamp {
+                Some(now_ts) => update_bytes_ema(
+                    latest.bytes_ema,
+                    latest.last_fetch_ts,
+                    now_ts,
+                    page_details.byte_size,
+                    6.0 * 3600.0,
+                ),
+                None => latest.bytes_ema,
+            };
+
+            results.push(Self {
+                url_key: url_key.clone(),
+                host_key: host_key.clone(),
+                site_key: site_key.clone(),
+                last_fetch_ts: last_fetch_ts.unwrap_or(Utc::now()),
+                last_status: last_status.unwrap_or(0) as i16,
+                etag,
+                last_modified,
+                fp_minhash,
+                change_ema,
+                soft404_ema,
+                thin_ema,
+                latency_ms_ema,
+                bytes_ema,
+            })
         }
 
-        unimplemented!();
+        Ok(results)
     }
 
     fn bind_values(&self) -> QueryValues {

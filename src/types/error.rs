@@ -33,6 +33,8 @@ pub enum AppError {
     #[error(transparent)]
     RedisError(#[from] redis::RedisError),
     #[error(transparent)]
+    HttpdateError(#[from] httpdate::Error),
+    #[error(transparent)]
     CdrsTokioError(#[from] cdrs_tokio::error::Error),
     #[error("HTTP {method} {status}: {message}")]
     Http {
