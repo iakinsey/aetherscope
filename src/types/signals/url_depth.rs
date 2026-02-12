@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
+use xxhrs::XXH3_128;
 
 use crate::types::{
     error::AppError,
@@ -44,7 +45,13 @@ impl Signal for UrlDepth {
         object_store: Arc<dyn ObjectStore>,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
-        unimplemented!()
+        let url_key = XXH3_128::hash(record.uri.as_bytes()).to_be_bytes().to_vec();
+
+        Ok(vec![Self {
+            url_key,
+            depth: record.depth,
+            discovered_ts: record.discovered,
+        }])
     }
 
     fn bind_values(&self) -> QueryValues {

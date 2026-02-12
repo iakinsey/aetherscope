@@ -61,6 +61,7 @@ impl<'a> Task for UrlExtractor<'a> {
             task_id: message.task_id,
             metadata: metadata,
             depth: message.depth,
+            discovered: message.discovered,
         })
     }
 }
@@ -125,6 +126,7 @@ mod tests {
             task_id: task_id,
             metadata: vec![RecordMetadata::HttpResponse(response)],
             depth: 0,
+            discovered: Utc::now(),
         };
 
         let response = extractor.on_message(record).await.unwrap();

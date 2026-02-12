@@ -333,6 +333,7 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
             task_id: message.task_id,
             metadata: metadata,
             depth: message.depth,
+            discovered: message.discovered,
         })
     }
 }
@@ -383,6 +384,7 @@ mod tests {
             task_id: task_id,
             metadata: vec![],
             depth: 0,
+            discovered: Utc::now(),
         };
 
         let response = fetcher.on_message(record).await.unwrap();
@@ -451,6 +453,7 @@ mod tests {
             task_id: task_id,
             metadata: vec![],
             depth: 0,
+            discovered: Utc::now(),
         };
 
         let response = fetcher.on_message(record).await.unwrap();
@@ -509,6 +512,7 @@ mod tests {
             task_id: task_id,
             metadata: vec![],
             depth: 0,
+            discovered: Utc::now(),
         };
 
         let response = fetcher.on_message(record).await.unwrap();
