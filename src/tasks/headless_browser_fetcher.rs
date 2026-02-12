@@ -332,6 +332,7 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
             uri: message.uri,
             task_id: message.task_id,
             metadata: metadata,
+            depth: message.depth,
         })
     }
 }
@@ -381,6 +382,7 @@ mod tests {
             uri: format!("{}/test", server.base_url()),
             task_id: task_id,
             metadata: vec![],
+            depth: 0,
         };
 
         let response = fetcher.on_message(record).await.unwrap();
@@ -448,6 +450,7 @@ mod tests {
             uri: server.base_url(),
             task_id: task_id,
             metadata: vec![],
+            depth: 0,
         };
 
         let response = fetcher.on_message(record).await.unwrap();
@@ -505,6 +508,7 @@ mod tests {
             uri: "http://127.0.0.1:9".to_string(),
             task_id: task_id,
             metadata: vec![],
+            depth: 0,
         };
 
         let response = fetcher.on_message(record).await.unwrap();

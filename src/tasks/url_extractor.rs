@@ -60,6 +60,7 @@ impl<'a> Task for UrlExtractor<'a> {
             uri: message.uri,
             task_id: message.task_id,
             metadata: metadata,
+            depth: message.depth,
         })
     }
 }
@@ -123,6 +124,7 @@ mod tests {
             uri: "http://example.com".to_string(),
             task_id: task_id,
             metadata: vec![RecordMetadata::HttpResponse(response)],
+            depth: 0,
         };
 
         let response = extractor.on_message(record).await.unwrap();
