@@ -69,6 +69,35 @@ pub fn normalize_url(origin: &Url, href: &str) -> Result<Url, ParseError> {
     origin.join(h)
 }
 
+pub fn normalize_prefix(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+
+    for segment in path.split('/') {
+        if segment.is_empty() {
+            continue;
+        }
+
+        let normalized = if is_numeric(segment) || is_uuid(segment) {
+            "{id}"
+        } else {
+            segment
+        };
+
+        out.push('/');
+        out.push_str(normalized);
+    }
+
+    if out.is_empty() { "/".into() } else { out }
+}
+
+fn is_numeric(s: &str) -> bool {
+    s.chars().all(|c| c.is_ascii_digit()) && s.len() >= 2
+}
+
+fn is_uuid(s: &str) -> bool {
+    s.len() == 36 && s.chars().filter(|&c| c == '-').count() == 4
+}
+
 fn looks_like_domainish(s: &str) -> bool {
     // reject obvious relative-only forms
     if s.starts_with('/') || s.starts_with('.') || s.starts_with('?') || s.starts_with('#') {

@@ -1,15 +1,21 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
+use url::Url;
+use xxhrs::XXH3_128;
 
-use crate::types::{
-    error::AppError,
-    structs::record::Record,
-    traits::{
-        object_store::ObjectStore,
-        signal::{DbSession, Signal},
+use crate::{
+    types::{
+        error::AppError,
+        structs::record::Record,
+        traits::{
+            object_store::ObjectStore,
+            signal::{DbSession, Signal},
+        },
     },
+    utils::web::{extract_host, normalize_prefix},
 };
 
 // Statistics for URL path prefixes or templates within a host.
@@ -60,6 +66,20 @@ impl Signal for PrefixStats {
         object_store: Arc<dyn ObjectStore>,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
+        let url = Url::from_str(&record.uri)?;
+        let host = extract_host(&url)?;
+        let path = url.path().to_ascii_lowercase();
+        let normalized_prefix = normalize_prefix(&path);
+        let host_key = XXH3_128::hash(host.as_bytes()).to_be_bytes().to_vec();
+        let prefix_key = XXH3_128::hash(normalized_prefix.as_bytes())
+            .to_be_bytes()
+            .to_vec();
+
+        let result = Self {
+            host_key,
+            prefix_key,
+            last_update_ts: Utc::now()
+        }
         unimplemented!()
     }
 
