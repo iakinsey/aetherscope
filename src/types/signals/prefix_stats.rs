@@ -79,8 +79,9 @@ impl Signal for PrefixStats {
         let result = Self {
             host_key,
             prefix_key,
-            last_update_ts: Utc::now()
-        }
+            last_update_ts: Utc::now(),
+        };
+
         unimplemented!()
     }
 
