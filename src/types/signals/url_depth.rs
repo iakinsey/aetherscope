@@ -6,7 +6,7 @@ use xxhrs::XXH3_128;
 
 use crate::types::{
     error::AppError,
-    structs::record::Record,
+    structs::{record::Record, signal_base::SignalBase},
     traits::{
         object_store::ObjectStore,
         signal::{DbSession, Signal},
@@ -43,6 +43,7 @@ impl Signal for UrlDepth {
     async fn from_record(
         session: Arc<DbSession>,
         object_store: Arc<dyn ObjectStore>,
+        base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
         let url_key = XXH3_128::hash(record.uri.as_bytes()).to_be_bytes().to_vec();

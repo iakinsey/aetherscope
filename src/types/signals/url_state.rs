@@ -8,6 +8,7 @@ use url::Url;
 use xxhrs::XXH3_128;
 
 use crate::types::structs::metadata::http_response::HttpResponse;
+use crate::types::structs::signal_base::SignalBase;
 use crate::types::traits::object_store::ObjectStore;
 use crate::utils::web::extract_page_state_details;
 use crate::{
@@ -270,6 +271,7 @@ impl Signal for UrlState {
     async fn from_record(
         session: Arc<DbSession>,
         object_store: Arc<dyn ObjectStore>,
+        base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
         let url = Url::from_str(&record.uri)?;

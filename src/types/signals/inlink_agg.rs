@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 
 use crate::types::{
     error::AppError,
-    structs::record::Record,
+    structs::{record::Record, signal_base::SignalBase},
     traits::{
         object_store::ObjectStore,
         signal::{DbSession, Signal},
@@ -52,6 +52,7 @@ impl Signal for InlinkAgg {
     async fn from_record(
         session: Arc<DbSession>,
         object_store: Arc<dyn ObjectStore>,
+        base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
         unimplemented!()

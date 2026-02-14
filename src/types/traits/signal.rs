@@ -7,7 +7,11 @@ use cdrs_tokio::{
     transport::TransportTcp,
 };
 
-use crate::types::{error::AppError, structs::record::Record, traits::object_store::ObjectStore};
+use crate::types::{
+    error::AppError,
+    structs::{record::Record, signal_base::SignalBase},
+    traits::object_store::ObjectStore,
+};
 
 pub type DbSession = Session<
     TransportTcp,
@@ -22,6 +26,7 @@ pub trait Signal: Sized + Send + Sync {
     async fn from_record(
         session: Arc<DbSession>,
         object_store: Arc<dyn ObjectStore>,
+        base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError>;
 
