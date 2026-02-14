@@ -71,14 +71,13 @@ impl Signal for PrefixStats {
         let host = extract_host(&url)?;
         let path = url.path().to_ascii_lowercase();
         let normalized_prefix = normalize_prefix(&path);
-        let host_key = XXH3_128::hash(host.as_bytes()).to_be_bytes().to_vec();
         let prefix_key = XXH3_128::hash(normalized_prefix.as_bytes())
             .to_be_bytes()
             .to_vec();
 
         let result = Self {
-            host_key,
-            prefix_key,
+            host_key: base.host_key,
+            prefix_key: base.prefix_key,
             last_update_ts: Utc::now(),
         };
 

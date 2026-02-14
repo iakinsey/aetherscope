@@ -277,11 +277,13 @@ impl Signal for UrlState {
         let url = Url::from_str(&record.uri)?;
         let site = extract_site(&url)?;
         let host = extract_host(&url)?;
-        let url_key = XXH3_128::hash(record.uri.as_bytes()).to_be_bytes().to_vec();
-        let host_key = XXH3_128::hash(host.as_bytes()).to_be_bytes().to_vec();
-        let site_key = XXH3_128::hash(site.as_bytes()).to_be_bytes().to_vec();
-        let latest =
-            Self::get_latest(session, url_key.clone(), host_key.clone(), site_key.clone()).await?;
+        let latest = Self::get_latest(
+            session,
+            base.url_key.clone(),
+            base.host_key.clone(),
+            base.site_key.clone(),
+        )
+        .await?;
         let mut results = vec![];
 
         for m in record.metadata {
@@ -373,9 +375,9 @@ impl Signal for UrlState {
             };
 
             results.push(Self {
-                url_key: url_key.clone(),
-                host_key: host_key.clone(),
-                site_key: site_key.clone(),
+                url_key: base.url_key.clone(),
+                host_key: base.host_key.clone(),
+                site_key: base.site_key.clone(),
                 last_fetch_ts: last_fetch_ts.unwrap_or(Utc::now()),
                 last_status: last_status.unwrap_or(0) as i16,
                 etag,

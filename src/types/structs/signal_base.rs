@@ -9,11 +9,11 @@ use crate::{
 };
 
 pub struct SignalBase {
-    url: Url,
-    url_key: Vec<u8>,
-    host_key: Vec<u8>,
-    site_key: Vec<u8>,
-    prefix_key: Vec<u8>,
+    pub url: Url,
+    pub url_key: Vec<u8>,
+    pub host_key: Vec<u8>,
+    pub site_key: Vec<u8>,
+    pub prefix_key: Vec<u8>,
 }
 
 impl SignalBase {
