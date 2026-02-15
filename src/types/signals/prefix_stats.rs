@@ -9,7 +9,10 @@ use xxhrs::XXH3_128;
 use crate::{
     types::{
         error::AppError,
-        structs::{record::Record, signal_base::SignalBase},
+        structs::{
+            record::{Record, RecordMetadata},
+            signal_base::SignalBase,
+        },
         traits::{
             object_store::ObjectStore,
             signal::{DbSession, Signal},
@@ -45,6 +48,8 @@ pub struct PrefixStats {
     pub host_key: Vec<u8>,
     // Hash of the prefix/template id
     pub prefix_key: Vec<u8>,
+    // SimHash fingerprint of fetched content
+    pub fp_minhash: Option<Vec<u64>>,
     // Most recent update timestamp
     pub last_update_ts: DateTime<Utc>,
     // EMA of duplicate pages
@@ -72,6 +77,7 @@ impl Signal for PrefixStats {
         CREATE TABLE IF NOT EXISTS prefix_stats (
             host_key        blob,
             prefix_key      blob,
+            fp_minhash      text,
             last_update_ts  timestamp,
             dup_page_ema    double,
             novelty_ema     double,
@@ -84,9 +90,9 @@ impl Signal for PrefixStats {
     const UPSERT_QUERY: &'static str = r#"
         INSERT INTO prefix_stats (
             host_key, prefix_key,
-            last_update_ts,
+            fp_minhash, last_update_ts,
             dup_page_ema, novelty_ema, near_dup_ema, variance_ema
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     "#;
 
     async fn from_record(
@@ -102,10 +108,18 @@ impl Signal for PrefixStats {
         let prefix_key = XXH3_128::hash(normalized_prefix.as_bytes())
             .to_be_bytes()
             .to_vec();
-        let duplicate = match (&prefix_prev_fp, &resp.minhash) {
-            (Some(prev), Some(cur)) => jaccard_index(cur, prev),
-            _ => false,
-        };
+        let latest = Self::get_latest(session, base.host_key, base.prefix_key).await?;
+
+        for m in record.metadata {
+            let RecordMetadata::HttpResponse(resp) = m else {
+                continue;
+            };
+
+            let duplicate = match (&latest.fp_minhash, &resp.minhash) {
+                (Some(prev), Some(cur)) => jaccard_index(cur, prev) >= 0.95,
+                _ => false,
+            };
+        }
 
         let dup_page_ema = update_dup_page_ema(
             prefix_stats.dup_page_ema,
