@@ -5,11 +5,11 @@ use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use httpdate::parse_http_date;
 use url::Url;
-use xxhrs::XXH3_128;
 
 use crate::types::structs::metadata::http_response::HttpResponse;
 use crate::types::structs::signal_base::SignalBase;
 use crate::types::traits::object_store::ObjectStore;
+use crate::utils::cassandra::get_fp_minhash;
 use crate::utils::web::extract_page_state_details;
 use crate::{
     types::{
@@ -195,18 +195,7 @@ impl UrlState {
         let last_status: Option<i16> = row.get_by_name("last_status")?;
         let etag: Option<String> = row.get_by_name("etag")?;
         let last_modified: Option<DateTime<Utc>> = row.get_by_name("last_modified")?;
-
-        let fp_minhash: Option<Vec<u64>> = {
-            let s: Option<String> = row.get_by_name("fp_minhash")?;
-
-            s.map(|txt| {
-                txt.split(',')
-                    .filter(|x| !x.is_empty())
-                    .map(|x| x.parse::<u64>().unwrap())
-                    .collect()
-            })
-        };
-
+        let fp_minhash = get_fp_minhash(&row, "fp_minhash")?;
         let change_ema: Option<f64> = row.get_by_name("change_ema")?;
         let soft404_ema: Option<f64> = row.get_by_name("soft404_ema")?;
         let thin_ema: Option<f64> = row.get_by_name("thin_ema")?;

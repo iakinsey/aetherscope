@@ -15,8 +15,26 @@ use crate::{
             signal::{DbSession, Signal},
         },
     },
-    utils::web::{extract_host, normalize_prefix},
+    utils::{
+        hash::jaccard_index,
+        web::{extract_host, normalize_prefix},
+    },
 };
+
+fn update_dup_page_ema(
+    prev_ema: f64,
+    prev_ts: DateTime<Utc>,
+    now_ts: DateTime<Utc>,
+    is_dup: bool,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+
+    let x = if is_dup { 1.0 } else { 0.0 };
+
+    prev_ema * decay + x * (1.0 - decay)
+}
 
 // Statistics for URL path prefixes or templates within a host.
 // Used to detect low-yield, duplicate-heavy, or spammy patterns
@@ -37,6 +55,16 @@ pub struct PrefixStats {
     pub near_dup_ema: f64,
     // EMA of content variance
     pub variance_ema: f64,
+}
+
+impl PrefixStats {
+    pub async fn get_latest(
+        session: Arc<DbSession>,
+        host_key: Vec<u8>,
+        prefix_key: Vec<u8>,
+    ) -> Result<Self, AppError> {
+        unimplemented!()
+    }
 }
 
 impl Signal for PrefixStats {
@@ -74,6 +102,18 @@ impl Signal for PrefixStats {
         let prefix_key = XXH3_128::hash(normalized_prefix.as_bytes())
             .to_be_bytes()
             .to_vec();
+        let duplicate = match (&prefix_prev_fp, &resp.minhash) {
+            (Some(prev), Some(cur)) => jaccard_index(cur, prev),
+            _ => false,
+        };
+
+        let dup_page_ema = update_dup_page_ema(
+            prefix_stats.dup_page_ema,
+            prefix_stats.last_update_ts,
+            now_ts,
+            duplicate,
+            30.0 * 24.0 * 3600.0,
+        );
 
         let result = Self {
             host_key: base.host_key,
