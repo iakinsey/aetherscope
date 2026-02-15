@@ -53,7 +53,7 @@ pub struct PrefixStats {
     // Most recent update timestamp
     pub last_update_ts: DateTime<Utc>,
     // EMA of duplicate pages
-    pub dup_page_ema: f64,
+    pub dup_page_ema: Option<f64>,
     // EMA of novelty
     pub novelty_ema: f64,
     // EMA of near-duplicate rate
@@ -119,15 +119,21 @@ impl Signal for PrefixStats {
                 (Some(prev), Some(cur)) => jaccard_index(cur, prev) >= 0.95,
                 _ => false,
             };
-        }
 
-        let dup_page_ema = update_dup_page_ema(
-            prefix_stats.dup_page_ema,
-            prefix_stats.last_update_ts,
-            now_ts,
-            duplicate,
-            30.0 * 24.0 * 3600.0,
-        );
+            let dup_page_ema = match latest.dup_page_ema {
+                Some(e) => match resp.timestamp {
+                    Some(t) => Some(update_dup_page_ema(
+                        e,
+                        latest.last_update_ts,
+                        t,
+                        duplicate,
+                        30.0 * 24.0 * 3600.0,
+                    )),
+                    None => None,
+                },
+                None => None,
+            };
+        }
 
         let result = Self {
             host_key: base.host_key,
