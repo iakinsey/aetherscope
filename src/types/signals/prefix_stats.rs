@@ -19,7 +19,7 @@ use crate::{
         },
     },
     utils::{
-        hash::jaccard_index,
+        hash::{jaccard_index, minhash_similarity},
         web::{extract_host, normalize_prefix},
     },
 };
@@ -35,6 +35,21 @@ fn update_dup_page_ema(
     let decay = (-dt / tau_seconds).exp();
 
     let x = if is_dup { 1.0 } else { 0.0 };
+
+    prev_ema * decay + x * (1.0 - decay)
+}
+
+fn update_novelty_ema(
+    prev_ema: f64,
+    prev_ts: DateTime<Utc>,
+    now_ts: DateTime<Utc>,
+    novel: bool,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+
+    let x = if novel { 1.0 } else { 0.0 };
 
     prev_ema * decay + x * (1.0 - decay)
 }
@@ -55,7 +70,7 @@ pub struct PrefixStats {
     // EMA of duplicate pages
     pub dup_page_ema: Option<f64>,
     // EMA of novelty
-    pub novelty_ema: f64,
+    pub novelty_ema: Option<f64>,
     // EMA of near-duplicate rate
     pub near_dup_ema: f64,
     // EMA of content variance
@@ -134,11 +149,31 @@ impl Signal for PrefixStats {
                 None => None,
             };
 
+            let novel = match (&latest.fp_minhash, &resp.minhash) {
+                (Some(prev), Some(cur)) => minhash_similarity(cur, prev)? < 0.85,
+                _ => true,
+            };
+
+            let novelty_ema = match latest.novelty_ema {
+                Some(e) => match resp.timestamp {
+                    Some(t) => Some(update_novelty_ema(
+                        e,
+                        latest.last_update_ts,
+                        t,
+                        novel,
+                        21.0 * 24.0 * 3600.0,
+                    )),
+                    None => None,
+                },
+                None => None,
+            };
+
             let result = Self {
                 host_key: base.host_key,
                 prefix_key: base.prefix_key,
                 last_update_ts: Utc::now(),
                 dup_page_ema: dup_page_ema,
+                novelty_ema,
             };
         }
 
