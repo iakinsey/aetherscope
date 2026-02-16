@@ -133,13 +133,14 @@ impl Signal for PrefixStats {
                 },
                 None => None,
             };
-        }
 
-        let result = Self {
-            host_key: base.host_key,
-            prefix_key: base.prefix_key,
-            last_update_ts: Utc::now(),
-        };
+            let result = Self {
+                host_key: base.host_key,
+                prefix_key: base.prefix_key,
+                last_update_ts: Utc::now(),
+                dup_page_ema: dup_page_ema,
+            };
+        }
 
         unimplemented!()
     }
