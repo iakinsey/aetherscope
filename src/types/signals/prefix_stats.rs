@@ -54,6 +54,34 @@ fn update_novelty_ema(
     prev_ema * decay + x * (1.0 - decay)
 }
 
+fn update_near_dup_ema(
+    prev_ema: f64,
+    prev_ts: DateTime<Utc>,
+    now_ts: DateTime<Utc>,
+    near_dup: bool,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+
+    let x = if near_dup { 1.0 } else { 0.0 };
+
+    prev_ema * decay + x * (1.0 - decay)
+}
+
+fn update_variance_ema(
+    prev_ema: f64,
+    prev_ts: DateTime<Utc>,
+    now_ts: DateTime<Utc>,
+    variance: f64,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now_ts - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+
+    prev_ema * decay + variance * (1.0 - decay)
+}
+
 // Statistics for URL path prefixes or templates within a host.
 // Used to detect low-yield, duplicate-heavy, or spammy patterns
 // and adjust crawl priority accordingly.
@@ -72,9 +100,9 @@ pub struct PrefixStats {
     // EMA of novelty
     pub novelty_ema: Option<f64>,
     // EMA of near-duplicate rate
-    pub near_dup_ema: f64,
-    // EMA of content variance
-    pub variance_ema: f64,
+    pub near_dup_ema: Option<f64>,
+    // EMA of content how often content changes
+    pub variance_ema: Option<f64>,
 }
 
 impl PrefixStats {
@@ -112,18 +140,13 @@ impl Signal for PrefixStats {
 
     async fn from_record(
         session: Arc<DbSession>,
-        object_store: Arc<dyn ObjectStore>,
+        _object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
-        let url = Url::from_str(&record.uri)?;
-        let host = extract_host(&url)?;
-        let path = url.path().to_ascii_lowercase();
-        let normalized_prefix = normalize_prefix(&path);
-        let prefix_key = XXH3_128::hash(normalized_prefix.as_bytes())
-            .to_be_bytes()
-            .to_vec();
-        let latest = Self::get_latest(session, base.host_key, base.prefix_key).await?;
+        let latest =
+            Self::get_latest(session, base.host_key.clone(), base.prefix_key.clone()).await?;
+        let mut results = vec![];
 
         for m in record.metadata {
             let RecordMetadata::HttpResponse(resp) = m else {
@@ -149,10 +172,13 @@ impl Signal for PrefixStats {
                 None => None,
             };
 
-            let novel = match (&latest.fp_minhash, &resp.minhash) {
-                (Some(prev), Some(cur)) => minhash_similarity(cur, prev)? < 0.85,
-                _ => true,
+            let similarity = match (&latest.fp_minhash, &resp.minhash) {
+                (Some(prev), Some(cur)) => minhash_similarity(cur, prev)?,
+                _ => 0.0,
             };
+
+            let novel = similarity < 0.85;
+            let variance = 1.0 - similarity;
 
             let novelty_ema = match latest.novelty_ema {
                 Some(e) => match resp.timestamp {
@@ -167,17 +193,51 @@ impl Signal for PrefixStats {
                 },
                 None => None,
             };
+            let near_dup = similarity >= 0.85 && similarity < 0.95;
+
+            let near_dup_ema = match latest.near_dup_ema {
+                Some(e) => match resp.timestamp {
+                    Some(t) => Some(update_near_dup_ema(
+                        e,
+                        latest.last_update_ts,
+                        t,
+                        near_dup,
+                        30.0 * 24.0 * 3600.0,
+                    )),
+                    None => None,
+                },
+                None => None,
+            };
+
+            let variance_ema = match latest.variance_ema {
+                Some(e) => match resp.timestamp {
+                    Some(t) => Some(update_variance_ema(
+                        e,
+                        latest.last_update_ts,
+                        t,
+                        variance,
+                        14.0 * 24.0 * 3600.0,
+                    )),
+                    None => None,
+                },
+                None => None,
+            };
 
             let result = Self {
-                host_key: base.host_key,
-                prefix_key: base.prefix_key,
+                host_key: base.host_key.clone(),
+                prefix_key: base.prefix_key.clone(),
+                fp_minhash: resp.minhash,
                 last_update_ts: Utc::now(),
                 dup_page_ema: dup_page_ema,
                 novelty_ema,
+                near_dup_ema,
+                variance_ema,
             };
+
+            results.push(result);
         }
 
-        unimplemented!()
+        Ok(results)
     }
 
     fn bind_values(&self) -> QueryValues {
