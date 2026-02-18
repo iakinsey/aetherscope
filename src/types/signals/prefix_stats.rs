@@ -1,10 +1,8 @@
-use std::str::FromStr;
 use std::sync::Arc;
 
+use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
-use url::Url;
-use xxhrs::XXH3_128;
 
 use crate::{
     types::{
@@ -19,8 +17,8 @@ use crate::{
         },
     },
     utils::{
+        cassandra::get_fp_minhash,
         hash::{jaccard_index, minhash_similarity},
-        web::{extract_host, normalize_prefix},
     },
 };
 
@@ -96,13 +94,13 @@ pub struct PrefixStats {
     // Most recent update timestamp
     pub last_update_ts: DateTime<Utc>,
     // EMA of duplicate pages
-    pub dup_page_ema: Option<f64>,
+    pub dup_page_ema: f64,
     // EMA of novelty
-    pub novelty_ema: Option<f64>,
+    pub novelty_ema: f64,
     // EMA of near-duplicate rate
-    pub near_dup_ema: Option<f64>,
+    pub near_dup_ema: f64,
     // EMA of content how often content changes
-    pub variance_ema: Option<f64>,
+    pub variance_ema: f64,
 }
 
 impl PrefixStats {
@@ -111,7 +109,61 @@ impl PrefixStats {
         host_key: Vec<u8>,
         prefix_key: Vec<u8>,
     ) -> Result<Self, AppError> {
-        unimplemented!()
+        const Q: &str = r#"
+            SELECT
+                host_key,
+                prefix_key,
+                fp_minhash,
+                last_update_ts,
+                dup_page_ema,
+                novelty_ema,
+                near_dup_ema,
+                variance_ema
+            FROM prefix_stats
+            WHERE host_key = ? AND prefix_key = ?
+        "#;
+
+        let prepared = session.prepare(Q).await?;
+        let result = session
+            .exec_with_values(
+                &prepared,
+                query_values!(host_key.clone(), prefix_key.clone()),
+            )
+            .await?;
+
+        let row = match result.response_body()?.into_rows() {
+            Some(mut rows) if !rows.is_empty() => rows.remove(0),
+            _ => {
+                return Ok(Self {
+                    host_key,
+                    prefix_key,
+                    fp_minhash: None,
+                    last_update_ts: Utc::now(),
+                    dup_page_ema: 0.0,
+                    novelty_ema: 0.0,
+                    near_dup_ema: 0.0,
+                    variance_ema: 0.0,
+                });
+            }
+        };
+
+        let fp_minhash = get_fp_minhash(&row, "fp_minhash")?;
+        let last_update_ts: Option<DateTime<Utc>> = row.get_by_name("last_update_ts")?;
+        let dup_page_ema: Option<f64> = row.get_by_name("dup_page_ema")?;
+        let novelty_ema: Option<f64> = row.get_by_name("novelty_ema")?;
+        let near_dup_ema: Option<f64> = row.get_by_name("near_dup_ema")?;
+        let variance_ema: Option<f64> = row.get_by_name("variance_ema")?;
+
+        Ok(Self {
+            host_key,
+            prefix_key,
+            fp_minhash,
+            last_update_ts: last_update_ts.unwrap_or(Utc::now()),
+            dup_page_ema: dup_page_ema.unwrap_or(0.0),
+            novelty_ema: novelty_ema.unwrap_or(0.0),
+            near_dup_ema: near_dup_ema.unwrap_or(0.0),
+            variance_ema: variance_ema.unwrap_or(0.0),
+        })
     }
 }
 
@@ -158,18 +210,15 @@ impl Signal for PrefixStats {
                 _ => false,
             };
 
-            let dup_page_ema = match latest.dup_page_ema {
-                Some(e) => match resp.timestamp {
-                    Some(t) => Some(update_dup_page_ema(
-                        e,
-                        latest.last_update_ts,
-                        t,
-                        duplicate,
-                        30.0 * 24.0 * 3600.0,
-                    )),
-                    None => None,
-                },
-                None => None,
+            let dup_page_ema = match resp.timestamp {
+                Some(t) => update_dup_page_ema(
+                    latest.dup_page_ema,
+                    latest.last_update_ts,
+                    t,
+                    duplicate,
+                    30.0 * 24.0 * 3600.0,
+                ),
+                None => latest.dup_page_ema,
             };
 
             let similarity = match (&latest.fp_minhash, &resp.minhash) {
@@ -180,47 +229,38 @@ impl Signal for PrefixStats {
             let novel = similarity < 0.85;
             let variance = 1.0 - similarity;
 
-            let novelty_ema = match latest.novelty_ema {
-                Some(e) => match resp.timestamp {
-                    Some(t) => Some(update_novelty_ema(
-                        e,
-                        latest.last_update_ts,
-                        t,
-                        novel,
-                        21.0 * 24.0 * 3600.0,
-                    )),
-                    None => None,
-                },
-                None => None,
+            let novelty_ema = match resp.timestamp {
+                Some(t) => update_novelty_ema(
+                    latest.novelty_ema,
+                    latest.last_update_ts,
+                    t,
+                    novel,
+                    21.0 * 24.0 * 3600.0,
+                ),
+                None => latest.novelty_ema,
             };
             let near_dup = similarity >= 0.85 && similarity < 0.95;
 
-            let near_dup_ema = match latest.near_dup_ema {
-                Some(e) => match resp.timestamp {
-                    Some(t) => Some(update_near_dup_ema(
-                        e,
-                        latest.last_update_ts,
-                        t,
-                        near_dup,
-                        30.0 * 24.0 * 3600.0,
-                    )),
-                    None => None,
-                },
-                None => None,
+            let near_dup_ema = match resp.timestamp {
+                Some(t) => update_near_dup_ema(
+                    latest.near_dup_ema,
+                    latest.last_update_ts,
+                    t,
+                    near_dup,
+                    30.0 * 24.0 * 3600.0,
+                ),
+                None => latest.near_dup_ema,
             };
 
-            let variance_ema = match latest.variance_ema {
-                Some(e) => match resp.timestamp {
-                    Some(t) => Some(update_variance_ema(
-                        e,
-                        latest.last_update_ts,
-                        t,
-                        variance,
-                        14.0 * 24.0 * 3600.0,
-                    )),
-                    None => None,
-                },
-                None => None,
+            let variance_ema = match resp.timestamp {
+                Some(t) => update_variance_ema(
+                    latest.variance_ema,
+                    latest.last_update_ts,
+                    t,
+                    variance,
+                    14.0 * 24.0 * 3600.0,
+                ),
+                None => latest.variance_ema,
             };
 
             let result = Self {
