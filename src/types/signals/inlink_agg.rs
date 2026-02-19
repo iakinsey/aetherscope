@@ -2,15 +2,35 @@ use std::sync::Arc;
 
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
+use url::Url;
+use xxhrs::XXH3_128;
 
-use crate::types::{
-    error::AppError,
-    structs::{record::Record, signal_base::SignalBase},
-    traits::{
-        object_store::ObjectStore,
-        signal::{DbSession, Signal},
+use crate::{
+    types::{
+        error::AppError,
+        structs::{
+            record::{Record, RecordMetadata},
+            signal_base::SignalBase,
+        },
+        traits::{
+            object_store::ObjectStore,
+            signal::{DbSession, Signal},
+        },
     },
+    utils::web::extract_site,
 };
+
+fn update_ema(
+    prev: f64,
+    prev_ts: DateTime<Utc>,
+    now: DateTime<Utc>,
+    x: f64,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+    prev * decay + x * (1.0 - decay)
+}
 
 // Aggregated inlink-based importance signals.
 // Stores EMA-style authority for URLs, hosts, or sites,
@@ -27,6 +47,17 @@ pub struct InlinkAgg {
     pub w_inlinks_ema: f64,
     // Most recent update timestamp
     pub last_update_ts: DateTime<Utc>,
+}
+impl InlinkAgg {
+    async fn get_latest(
+        session: Arc<DbSession>,
+        target_key: Vec<u8>,
+        kind: i8,
+    ) -> Result<Self, AppError> {
+        // If empty, emas are  0 and last_update_ts is now (probably can be passed in)
+
+        unimplemented!()
+    }
 }
 
 impl Signal for InlinkAgg {
@@ -51,11 +82,77 @@ impl Signal for InlinkAgg {
 
     async fn from_record(
         session: Arc<DbSession>,
-        object_store: Arc<dyn ObjectStore>,
-        base: SignalBase,
+        _object_store: Arc<dyn ObjectStore>,
+        _base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
-        unimplemented!()
+        // 1) pull now_ts from HttpResponse (response completion time)
+        let mut now_ts: Option<DateTime<Utc>> = None;
+
+        // 2) pull outlinks from Uris metadata
+        let mut out_uris: Vec<String> = Vec::new();
+
+        for m in &record.metadata {
+            match m {
+                RecordMetadata::HttpResponse(resp) => {
+                    if now_ts.is_none() {
+                        now_ts = resp.timestamp;
+                    }
+                }
+                RecordMetadata::Uris(u) => {
+                    out_uris.extend(u.uris.iter().cloned());
+                }
+                _ => {}
+            }
+        }
+
+        let now = match now_ts {
+            Some(t) => t,
+            None => return Ok(Vec::new()),
+        };
+
+        let tau = 30.0 * 24.0 * 3600.0;
+
+        let mut rows = Vec::new();
+
+        for uri in out_uris {
+            let url = match Url::parse(&uri) {
+                Ok(u) => u,
+                Err(_) => continue,
+            };
+
+            let host = match url.host_str() {
+                Some(h) => h,
+                None => continue,
+            };
+
+            let site = extract_site(&url)?; // your existing function
+
+            let url_key = XXH3_128::hash(uri.as_bytes()).to_be_bytes().to_vec();
+            let host_key = XXH3_128::hash(host.as_bytes()).to_be_bytes().to_vec();
+            let site_key = XXH3_128::hash(site.as_bytes()).to_be_bytes().to_vec();
+
+            let targets = [(url_key, 0i8), (host_key, 1i8), (site_key, 2i8)];
+
+            for (target_key, kind) in targets {
+                let prev = Self::get_latest(session.clone(), target_key.clone(), kind).await?;
+                let inlinks_ema = update_ema(prev.inlinks_ema, prev.last_update_ts, now, 1.0, tau);
+
+                // No weighting info present in provided structs -> weight=1.0
+                let w_inlinks_ema =
+                    update_ema(prev.w_inlinks_ema, prev.last_update_ts, now, 1.0, tau);
+
+                rows.push(Self {
+                    target_key,
+                    kind,
+                    inlinks_ema,
+                    w_inlinks_ema,
+                    last_update_ts: now,
+                });
+            }
+        }
+
+        Ok(rows)
     }
 
     fn bind_values(&self) -> QueryValues {
