@@ -86,10 +86,7 @@ impl Signal for InlinkAgg {
         _base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
-        // 1) pull now_ts from HttpResponse (response completion time)
         let mut now_ts: Option<DateTime<Utc>> = None;
-
-        // 2) pull outlinks from Uris metadata
         let mut out_uris: Vec<String> = Vec::new();
 
         for m in &record.metadata {
@@ -126,7 +123,7 @@ impl Signal for InlinkAgg {
                 None => continue,
             };
 
-            let site = extract_site(&url)?; // your existing function
+            let site = extract_site(&url)?;
 
             let url_key = XXH3_128::hash(uri.as_bytes()).to_be_bytes().to_vec();
             let host_key = XXH3_128::hash(host.as_bytes()).to_be_bytes().to_vec();
@@ -137,8 +134,6 @@ impl Signal for InlinkAgg {
             for (target_key, kind) in targets {
                 let prev = Self::get_latest(session.clone(), target_key.clone(), kind).await?;
                 let inlinks_ema = update_ema(prev.inlinks_ema, prev.last_update_ts, now, 1.0, tau);
-
-                // No weighting info present in provided structs -> weight=1.0
                 let w_inlinks_ema =
                     update_ema(prev.w_inlinks_ema, prev.last_update_ts, now, 1.0, tau);
 
