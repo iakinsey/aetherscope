@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use url::Url;
@@ -55,8 +56,47 @@ impl InlinkAgg {
         kind: i8,
     ) -> Result<Self, AppError> {
         // If empty, emas are  0 and last_update_ts is now (probably can be passed in)
+        const Q: &str = r#"
+            SELECT
+                target_key,
+                kind,
+                inlinks_ema,
+                w_inlinks_ema,
+                last_update_ts
+            FROM inlink_agg
+            WHERE target_key = ? 
+            AND kind = ?;
+        "#;
 
-        unimplemented!()
+        let prepared = session.prepare(Q).await?;
+        let result = session
+            .exec_with_values(&prepared, query_values!(target_key.clone()))
+            .await?;
+
+        let row = match result.response_body()?.into_rows() {
+            Some(mut rows) if !rows.is_empty() => rows.remove(0),
+            _ => {
+                return Ok(Self {
+                    target_key,
+                    kind,
+                    inlinks_ema: 0.0,
+                    w_inlinks_ema: 0.0,
+                    last_update_ts: Utc::now(),
+                });
+            }
+        };
+
+        let inlinks_ema: Option<f64> = row.get_by_name("inlinks_ema")?;
+        let w_inlinks_ema: Option<f64> = row.get_by_name("w_inlinks_ema")?;
+        let last_update_ts: Option<DateTime<Utc>> = row.get_by_name("last_update_ts")?;
+
+        Ok(Self {
+            target_key,
+            kind,
+            inlinks_ema: inlinks_ema.unwrap_or(0.0),
+            w_inlinks_ema: w_inlinks_ema.unwrap_or(0.0),
+            last_update_ts: last_update_ts.unwrap_or_else(Utc::now),
+        })
     }
 }
 
