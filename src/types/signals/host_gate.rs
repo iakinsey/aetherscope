@@ -5,7 +5,10 @@ use chrono::{DateTime, Utc};
 
 use crate::types::{
     error::AppError,
-    structs::{record::Record, signal_base::SignalBase},
+    structs::{
+        record::{Record, RecordMetadata},
+        signal_base::SignalBase,
+    },
     traits::{
         object_store::ObjectStore,
         signal::{DbSession, Signal},
@@ -42,14 +45,55 @@ impl Signal for HostGate {
             host_key, next_allowed_ts, lease_until_ts, lease_owner
         ) VALUES (?, ?, ?, ?)
     "#;
-
     async fn from_record(
-        session: Arc<DbSession>,
-        object_store: Arc<dyn ObjectStore>,
+        _session: Arc<DbSession>,
+        _object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
-        unimplemented!()
+        let mut response_ts = None;
+        let mut status = None;
+        let mut fallback_ts = None;
+
+        for m in &record.metadata {
+            if let RecordMetadata::HttpResponse(resp) = m {
+                status = resp.status;
+                response_ts = resp.timestamp;
+                fallback_ts = Some(resp.request.timestamp);
+                break;
+            }
+        }
+
+        // no fetch attempt
+        let now = match (response_ts, fallback_ts) {
+            (Some(t), _) => t,
+            (None, Some(t)) => t,
+            _ => return Ok(Vec::new()),
+        };
+
+        let delay = match status {
+            Some(200..=299) => 1,   // healthy
+            Some(301..=399) => 1,   // healthy, just redirect
+            Some(404) => 10,        // client error
+            Some(429) => 60,        // throttled
+            Some(500..=599) => 120, // server error
+            None => 180,            // timeout/network failure
+            _ => 30,
+        };
+
+        let next_allowed_ts = now + chrono::Duration::seconds(delay);
+
+        // short lease window (worker ownership)
+        let lease_until_ts = now + chrono::Duration::seconds(15);
+
+        let row = Self {
+            host_key: base.host_key,
+            next_allowed_ts,
+            lease_until_ts,
+            lease_owner: TODO,
+        };
+
+        Ok(vec![row])
     }
 
     fn bind_values(&self) -> QueryValues {
