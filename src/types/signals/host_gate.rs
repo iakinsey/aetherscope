@@ -1,3 +1,4 @@
+use cdrs_tokio::types::IntoRustByName;
 use std::sync::Arc;
 
 use cdrs_tokio::{query::QueryValues, query_values};
@@ -27,7 +28,49 @@ pub struct HostGate {
     // Timestamp until which the current lease is valid
     pub lease_until_ts: DateTime<Utc>,
     // Identifier of the worker that currently owns the lease
-    pub lease_owner: String,
+    pub lease_owner: Option<String>,
+}
+
+impl HostGate {
+    async fn get_latest(session: Arc<DbSession>, host_key: Vec<u8>) -> Result<Self, AppError> {
+        const Q: &str = r#"
+            SELECT
+                host_key,
+                next_allowed_ts,
+                lease_until_ts,
+                lease_owner
+            FROM host_gate
+            WHERE host_key = ?;
+        "#;
+
+        let prepared = session.prepare(Q).await?;
+        let result = session
+            .exec_with_values(&prepared, query_values!(host_key.clone()))
+            .await?;
+
+        let row = match result.response_body()?.into_rows() {
+            Some(mut rows) if !rows.is_empty() => rows.remove(0),
+            _ => {
+                return Ok(Self {
+                    host_key,
+                    next_allowed_ts: Utc::now(),
+                    lease_until_ts: Utc::now(),
+                    lease_owner: None,
+                });
+            }
+        };
+
+        let next_allowed_ts: Option<DateTime<Utc>> = row.get_by_name("next_allowed_ts")?;
+        let lease_until_ts: Option<DateTime<Utc>> = row.get_by_name("lease_until_ts")?;
+        let lease_owner: Option<String> = row.get_by_name("lease_owner")?;
+
+        Ok(Self {
+            host_key,
+            next_allowed_ts: next_allowed_ts.unwrap_or(Utc::now()),
+            lease_until_ts: lease_until_ts.unwrap_or(Utc::now()),
+            lease_owner: lease_owner,
+        })
+    }
 }
 
 impl Signal for HostGate {
@@ -45,6 +88,7 @@ impl Signal for HostGate {
             host_key, next_allowed_ts, lease_until_ts, lease_owner
         ) VALUES (?, ?, ?, ?)
     "#;
+
     async fn from_record(
         _session: Arc<DbSession>,
         _object_store: Arc<dyn ObjectStore>,
@@ -85,7 +129,7 @@ impl Signal for HostGate {
                     host_key: base.host_key.clone(),
                     next_allowed_ts,
                     lease_until_ts,
-                    lease_owner: resp.request.worker_id.clone(),
+                    lease_owner: Some(resp.request.worker_id.clone()),
                 };
 
                 results.push(row);
