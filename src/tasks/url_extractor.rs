@@ -7,7 +7,7 @@ use crate::{
         configs::tasks::url_extractor_config::UrlExtractorConfig,
         error::AppError,
         structs::{
-            metadata::uris::Uris,
+            metadata::{execution_context::ExecutionContext, uris::Uris},
             record::{Record, RecordMetadata},
         },
         traits::{object_store::ObjectStore, task::Task},
@@ -36,7 +36,7 @@ impl<'a> UrlExtractor<'a> {
 
 #[async_trait]
 impl<'a> Task for UrlExtractor<'a> {
-    async fn on_message(&self, message: Record) -> Result<Record, AppError> {
+    async fn on_message(&self, ctx: ExecutionContext, message: Record) -> Result<Record, AppError> {
         let mut metadata = vec![];
 
         for meta in message.metadata {
@@ -103,6 +103,7 @@ mod tests {
                 method: "GET".to_string(),
                 request_headers: HashMap::new(),
                 timestamp: Utc::now(),
+                worker_id: "".to_string(),
             },
             response_headers: HashMap::new(),
             key: Some(key),
@@ -128,8 +129,11 @@ mod tests {
             depth: 0,
             discovered: Utc::now(),
         };
+        let ctx = ExecutionContext {
+            worker_id: "".to_string(),
+        };
 
-        let response = extractor.on_message(record).await.unwrap();
+        let response = extractor.on_message(ctx, record).await.unwrap();
 
         assert_eq!(response.metadata.len(), 2);
 

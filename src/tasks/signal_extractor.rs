@@ -4,7 +4,7 @@ use crate::types::{
     configs::tasks::signal_extractor_config::SignalExtractorConfig,
     error::AppError,
     signals::url_state::UrlState,
-    structs::record::Record,
+    structs::{metadata::execution_context::ExecutionContext, record::Record},
     traits::{signal::Signal, task::Task},
 };
 
@@ -20,7 +20,7 @@ impl<'a> SignalExtractor<'a> {
 
 #[async_trait]
 impl<'a> Task for SignalExtractor<'a> {
-    async fn on_message(&self, message: Record) -> Result<Record, AppError> {
+    async fn on_message(&self, ctx: ExecutionContext, message: Record) -> Result<Record, AppError> {
         // TODO start here next, create a trait for signals so that it can extract
         // them and output the values for writing.
         unimplemented!()

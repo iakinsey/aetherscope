@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 #[derive(Debug, Clone)]
 pub struct HttpRequest {
     pub method: String,
+    pub worker_id: String,
     pub request_headers: HashMap<String, String>,
     pub timestamp: DateTime<Utc>,
 }

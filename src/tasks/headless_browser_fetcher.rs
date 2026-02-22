@@ -5,7 +5,10 @@ use crate::{
         configs::tasks::headless_browser_config::HeadlessBrowserConfig,
         error::AppError,
         structs::{
-            metadata::http_response::{HttpRequest, HttpResponse},
+            metadata::{
+                execution_context::ExecutionContext,
+                http_response::{HttpRequest, HttpResponse},
+            },
             record::{Record, RecordMetadata},
         },
         traits::{object_store::ObjectStore, task::Task},
@@ -111,6 +114,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
         object_store: Arc<dyn ObjectStore>,
         idle_timeout: Duration,
         request_timestamp: DateTime<Utc>,
+        ctx: &ExecutionContext,
     ) -> Result<HttpResponse, AppError> {
         let mut reqs = page
             .event_listener::<network::EventRequestWillBeSent>()
@@ -174,6 +178,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                                 method: "GET".to_string(),
                                 request_headers: HashMap::new(),
                                 timestamp: request_timestamp,
+                                worker_id: ctx.worker_id.clone(),
                             },
                             response_headers: HashMap::new(),
                             key: None,
@@ -230,6 +235,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                                 method: "GET".to_string(),
                                 request_headers: HashMap::new(),
                                 timestamp: request_timestamp,
+                                worker_id: ctx.worker_id.clone(),
                             },
                             response_headers: HashMap::new(),
                             key: None,
@@ -263,6 +269,7 @@ impl<'a> HeadlessBrowserFetcher<'a> {
                 method: method.to_string(),
                 request_headers,
                 timestamp: request_timestamp,
+                worker_id: ctx.worker_id.clone(),
             },
             response_headers,
             status,
@@ -298,7 +305,7 @@ pub fn headers_to_hashmap(headers: Option<network::Headers>) -> HashMap<String, 
 
 #[async_trait]
 impl<'a> Task for HeadlessBrowserFetcher<'a> {
-    async fn on_message(&self, message: Record) -> Result<Record, AppError> {
+    async fn on_message(&self, ctx: ExecutionContext, message: Record) -> Result<Record, AppError> {
         let request_timestamp = Utc::now();
         let tab = self.pool.get().await?;
         let response = match Self::fetch_http_response(
@@ -307,6 +314,7 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
             self.object_store.clone(),
             Duration::from_secs(self.config.timeout as u64),
             request_timestamp,
+            &ctx,
         )
         .await
         {
@@ -317,6 +325,7 @@ impl<'a> Task for HeadlessBrowserFetcher<'a> {
                     method: "GET".to_string(),
                     request_headers: HashMap::new(),
                     timestamp: request_timestamp,
+                    worker_id: ctx.worker_id.clone(),
                 },
                 response_headers: HashMap::new(),
                 key: None,
@@ -386,8 +395,11 @@ mod tests {
             depth: 0,
             discovered: Utc::now(),
         };
+        let ctx = ExecutionContext {
+            worker_id: "".to_string(),
+        };
 
-        let response = fetcher.on_message(record).await.unwrap();
+        let response = fetcher.on_message(ctx, record).await.unwrap();
 
         mock.assert();
 
@@ -455,8 +467,11 @@ mod tests {
             depth: 0,
             discovered: Utc::now(),
         };
+        let ctx = ExecutionContext {
+            worker_id: "".to_string(),
+        };
 
-        let response = fetcher.on_message(record).await.unwrap();
+        let response = fetcher.on_message(ctx, record).await.unwrap();
 
         mock.assert();
 
@@ -514,8 +529,11 @@ mod tests {
             depth: 0,
             discovered: Utc::now(),
         };
+        let ctx = ExecutionContext {
+            worker_id: "".to_string(),
+        };
 
-        let response = fetcher.on_message(record).await.unwrap();
+        let response = fetcher.on_message(ctx, record).await.unwrap();
 
         let http_response: &HttpResponse = match response.metadata.first() {
             Some(RecordMetadata::HttpResponse(r)) => r,

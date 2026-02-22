@@ -5,7 +5,10 @@ use crate::{
         configs::tasks::http_fetcher_config::HttpFetcherConfig,
         error::AppError,
         structs::{
-            metadata::http_response::{HttpRequest, HttpResponse},
+            metadata::{
+                execution_context::ExecutionContext,
+                http_response::{HttpRequest, HttpResponse},
+            },
             record::{Record, RecordMetadata},
         },
         traits::{object_store::ObjectStore, task::Task},
@@ -52,6 +55,7 @@ impl<'a> HttpFetcher<'a> {
         &self,
         uri: &str,
         request_timestamp: DateTime<Utc>,
+        ctx: &ExecutionContext,
     ) -> Result<HttpResponse, AppError> {
         let req = self.client.get(uri).build()?;
         let (req_headers, method) = {
@@ -83,6 +87,7 @@ impl<'a> HttpFetcher<'a> {
                 method: method.to_string(),
                 request_headers: req_headers,
                 timestamp: request_timestamp,
+                worker_id: ctx.worker_id.clone(),
             },
             response_headers,
             status: Some(status as i64),
@@ -96,10 +101,10 @@ impl<'a> HttpFetcher<'a> {
 
 #[async_trait]
 impl<'a> Task for HttpFetcher<'a> {
-    async fn on_message(&self, message: Record) -> Result<Record, AppError> {
+    async fn on_message(&self, ctx: ExecutionContext, message: Record) -> Result<Record, AppError> {
         let request_timestamp = Utc::now();
         let response = match self
-            .fetch_http_response(&message.uri, request_timestamp)
+            .fetch_http_response(&message.uri, request_timestamp, &ctx)
             .await
         {
             Ok(r) => r,
@@ -108,6 +113,7 @@ impl<'a> Task for HttpFetcher<'a> {
                     method: "GET".to_string(),
                     request_headers: HashMap::new(),
                     timestamp: request_timestamp,
+                    worker_id: ctx.worker_id,
                 },
                 status: None,
                 response_headers: HashMap::new(),
@@ -177,8 +183,11 @@ mod tests {
             depth: 0,
             discovered: Utc::now(),
         };
+        let ctx = ExecutionContext {
+            worker_id: "".to_string(),
+        };
 
-        let response = fetcher.on_message(record).await.unwrap();
+        let response = fetcher.on_message(ctx, record).await.unwrap();
 
         mock.assert();
 
@@ -245,8 +254,11 @@ mod tests {
             depth: 0,
             discovered: Utc::now(),
         };
+        let ctx = ExecutionContext {
+            worker_id: "".to_string(),
+        };
 
-        let response = fetcher.on_message(record).await.unwrap();
+        let response = fetcher.on_message(ctx, record).await.unwrap();
 
         mock.assert();
 
@@ -303,8 +315,11 @@ mod tests {
             depth: 0,
             discovered: Utc::now(),
         };
+        let ctx = ExecutionContext {
+            worker_id: "".to_string(),
+        };
 
-        let response = fetcher.on_message(record).await.unwrap();
+        let response = fetcher.on_message(ctx, record).await.unwrap();
 
         let http_response: &HttpResponse = match response.metadata.first() {
             Some(RecordMetadata::HttpResponse(r)) => r,
