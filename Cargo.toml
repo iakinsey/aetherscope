@@ -30,6 +30,8 @@ xxhrs = "2.0.1"
 psl = "2.1.183"
 minhash-rs = "0.2.0"
 xxhash-rust = "0.8.15"
+probabilistic-collections = { version = "0.7", features = ["serde"] }
+bincode = "1.3"
 
 [dev-dependencies]
 httpmock = "0.8.2"

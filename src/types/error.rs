@@ -36,6 +36,8 @@ pub enum AppError {
     HttpdateError(#[from] httpdate::Error),
     #[error(transparent)]
     CdrsTokioError(#[from] cdrs_tokio::error::Error),
+    #[error(transparent)]
+    BincodeError(#[from] Box<bincode::ErrorKind>),
     #[error("HTTP {method} {status}: {message}")]
     Http {
         status: i64,

@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
+use bincode::serialize;
+use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
+use probabilistic_collections::hyperloglog::HyperLogLog;
 
 use crate::types::{
     error::AppError,
@@ -25,6 +28,45 @@ pub struct DomainCoverage {
     pub hll_fetched: Vec<u8>,
     // Most recent update timestamp
     pub last_update_ts: DateTime<Utc>,
+}
+
+impl DomainCoverage {
+    async fn get_latest(session: Arc<DbSession>, domain_key: Vec<u8>) -> Result<Self, AppError> {
+        // If empty, emas are  0 and last_update_ts is now (probably can be passed in)
+        const Q: &str = r#"
+            SELECT
+                hll_discovered,
+                hll_fetched,
+                last_update_ts
+            FROM domain_coverage
+            WHERE domain_key = ? 
+        "#;
+
+        let prepared = session.prepare(Q).await?;
+        let result = session
+            .exec_with_values(&prepared, query_values!(domain_key.clone()))
+            .await?;
+
+        let row = match result.response_body()?.into_rows() {
+            Some(mut rows) if !rows.is_empty() => rows.remove(0),
+            _ => {
+                let mut hll = HyperLogLog::<u64>::new(0.0325); // p = 10
+                let bytes: Vec<u8> = serialize(&hll)?;
+                return Ok(Self {
+                    domain_key,
+                    hll_discovered: bytes,
+                    hll_fetched: bytes,
+                    last_update_ts: Utc::now(),
+                });
+            }
+        };
+
+        let hll_discovered: Option<Vec<u8>> = row.get_by_name("inlinks_ema")?;
+        let w_inlinks_ema: Option<f64> = row.get_by_name("w_inlinks_ema")?;
+        let last_update_ts: Option<DateTime<Utc>> = row.get_by_name("last_update_ts")?;
+
+        unimplemented!()
+    }
 }
 
 impl Signal for DomainCoverage {
