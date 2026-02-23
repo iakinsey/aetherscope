@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use bincode::serialize;
 use cdrs_tokio::types::IntoRustByName;
+use cdrs_tokio::types::blob::Blob;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use probabilistic_collections::hyperloglog::HyperLogLog;
@@ -54,18 +55,25 @@ impl DomainCoverage {
                 let bytes: Vec<u8> = serialize(&hll)?;
                 return Ok(Self {
                     domain_key,
-                    hll_discovered: bytes,
+                    hll_discovered: bytes.clone(),
                     hll_fetched: bytes,
                     last_update_ts: Utc::now(),
                 });
             }
         };
 
-        let hll_discovered: Option<Vec<u8>> = row.get_by_name("inlinks_ema")?;
-        let w_inlinks_ema: Option<f64> = row.get_by_name("w_inlinks_ema")?;
+        let hll_discovered: Blob = row.get_r_by_name("hll_discovered")?;
+        let hll_discovered: Vec<u8> = hll_discovered.into_vec();
+        let hll_fetched: Blob = row.get_r_by_name("hll_fetched")?;
+        let hll_fetched: Vec<u8> = hll_fetched.into_vec();
         let last_update_ts: Option<DateTime<Utc>> = row.get_by_name("last_update_ts")?;
 
-        unimplemented!()
+        Ok(Self {
+            domain_key,
+            hll_discovered,
+            hll_fetched,
+            last_update_ts: last_update_ts.unwrap_or(Utc::now()),
+        })
     }
 }
 
