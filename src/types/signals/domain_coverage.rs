@@ -51,7 +51,7 @@ impl DomainCoverage {
         let row = match result.response_body()?.into_rows() {
             Some(mut rows) if !rows.is_empty() => rows.remove(0),
             _ => {
-                let mut hll = HyperLogLog::<u64>::new(0.0325); // p = 10
+                let hll = HyperLogLog::<u64>::new(0.0325); // p = 10
                 let bytes: Vec<u8> = serialize(&hll)?;
                 return Ok(Self {
                     domain_key,
@@ -99,6 +99,8 @@ impl Signal for DomainCoverage {
         base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
+        let domain_key = base.site_key;
+
         unimplemented!()
     }
 
