@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use bincode::serialize;
+use bincode::{deserialize, serialize};
 use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::types::blob::Blob;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use probabilistic_collections::hyperloglog::HyperLogLog;
 
+use crate::types::structs::record::RecordMetadata;
 use crate::types::{
     error::AppError,
     structs::{record::Record, signal_base::SignalBase},
@@ -51,7 +52,7 @@ impl DomainCoverage {
         let row = match result.response_body()?.into_rows() {
             Some(mut rows) if !rows.is_empty() => rows.remove(0),
             _ => {
-                let hll = HyperLogLog::<u64>::new(0.0325); // p = 10
+                let hll = HyperLogLog::<String>::new(0.0325); // p = 10
                 let bytes: Vec<u8> = serialize(&hll)?;
                 return Ok(Self {
                     domain_key,
@@ -95,13 +96,34 @@ impl Signal for DomainCoverage {
 
     async fn from_record(
         session: Arc<DbSession>,
-        object_store: Arc<dyn ObjectStore>,
+        _object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
         let domain_key = base.site_key;
+        let latest = Self::get_latest(session, domain_key.clone()).await?;
+        let mut hll_discovered: HyperLogLog<String> = deserialize(&latest.hll_discovered)?;
+        let mut hll_fetched: HyperLogLog<String> = deserialize(&latest.hll_fetched)?;
+        let last_update_ts = Utc::now();
 
-        unimplemented!()
+        for m in record.metadata {
+            if let RecordMetadata::HttpResponse(_) = m {
+                hll_fetched.insert(&record.uri);
+            };
+
+            if let RecordMetadata::Uris(uris) = m {
+                for uri in uris.uris {
+                    hll_discovered.insert(&uri);
+                }
+            }
+        }
+
+        Ok(vec![Self {
+            domain_key,
+            hll_discovered: serialize(&hll_discovered)?,
+            hll_fetched: serialize(&hll_fetched)?,
+            last_update_ts,
+        }])
     }
 
     fn bind_values(&self) -> QueryValues {
