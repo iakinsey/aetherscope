@@ -5,12 +5,27 @@ use chrono::{DateTime, Utc};
 
 use crate::types::{
     error::AppError,
-    structs::{record::Record, signal_base::SignalBase},
+    structs::{
+        record::{Record, RecordMetadata},
+        signal_base::SignalBase,
+    },
     traits::{
         object_store::ObjectStore,
         signal::{DbSession, Signal},
     },
 };
+
+fn update_prior_ema(
+    prev: f64,
+    prev_ts: DateTime<Utc>,
+    now: DateTime<Utc>,
+    x: f64,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+    prev * decay + x * (1.0 - decay)
+}
 
 // Static or slowly changing authority prior per site.
 // Used to bootstrap importance before sufficient crawl data exists.
@@ -22,6 +37,15 @@ pub struct DomainAuthorityPrior {
     pub authority: f64,
     // Most recent update timestamp
     pub updated_ts: DateTime<Utc>,
+}
+
+impl DomainAuthorityPrior {
+    pub async fn get_latest(
+        session: Arc<DbSession>,
+        domain_key: Vec<u8>,
+    ) -> Result<Self, AppError> {
+        unimplemented!()
+    }
 }
 
 impl Signal for DomainAuthorityPrior {
@@ -45,7 +69,40 @@ impl Signal for DomainAuthorityPrior {
         base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
-        unimplemented!()
+        let domain_key = base.site_key;
+        let mut updated_ts: Option<DateTime<Utc>> = None;
+        let mut success = false;
+
+        for m in &record.metadata {
+            if let RecordMetadata::HttpResponse(resp) = m {
+                updated_ts = resp.timestamp;
+                if let Some(status) = resp.status {
+                    if (200..400).contains(&status) {
+                        success = true;
+                    }
+                }
+                break;
+            }
+        }
+        let updated_ts = match updated_ts {
+            Some(t) => t,
+            None => return Ok(Vec::new()),
+        };
+
+        let latest = Self::get_latest(session.clone(), domain_key.clone()).await?;
+        let authority = update_prior_ema(
+            latest.authority,
+            latest.updated_ts,
+            updated_ts,
+            if success { 1.0 } else { 0.0 },
+            90.0 * 24.0 * 3600.0,
+        );
+
+        Ok(vec![Self {
+            domain_key,
+            authority,
+            updated_ts,
+        }])
     }
 
     fn bind_values(&self) -> QueryValues {
