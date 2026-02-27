@@ -2,15 +2,31 @@ use std::sync::Arc;
 
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
+use xxhash_rust::xxh3::xxh3_128;
 
 use crate::types::{
     error::AppError,
-    structs::{record::Record, signal_base::SignalBase},
+    structs::{
+        record::{Record, RecordMetadata},
+        signal_base::SignalBase,
+    },
     traits::{
         object_store::ObjectStore,
         signal::{DbSession, Signal},
     },
 };
+
+fn update_ema(
+    prev: f64,
+    prev_ts: DateTime<Utc>,
+    now: DateTime<Utc>,
+    x: f64,
+    tau_seconds: f64,
+) -> f64 {
+    let dt = (now - prev_ts).num_seconds().max(0) as f64;
+    let decay = (-dt / tau_seconds).exp();
+    prev * decay + x * (1.0 - decay)
+}
 
 // Striped per-host aggregate statistics.
 // Host-level EMAs are spread across multiple stripes to avoid
@@ -45,6 +61,16 @@ pub struct HostStatsStripe {
     pub novel_outlink_ema: f64,
     // EMA of redirects
     pub redirect_ema: f64,
+}
+
+impl HostStatsStripe {
+    pub async fn get_latest(
+        session: Arc<DbSession>,
+        host_key: Vec<u8>,
+        stripe: i8,
+    ) -> Result<Self, AppError> {
+        unimplemented!()
+    }
 }
 
 impl Signal for HostStatsStripe {
@@ -86,6 +112,23 @@ impl Signal for HostStatsStripe {
         base: SignalBase,
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
+        const N_STRIPES: i8 = 16;
+        let host_key = base.host_key.clone();
+        let stripe = ((xxh3_128(&host_key) as u64) % (N_STRIPES as u64)) as i8;
+
+        for m in record.metadata {
+            let RecordMetadata::HttpResponse(resp) = m else {
+                continue;
+            };
+
+            let now = match resp.timestamp {
+                Some(t) => t,
+                None => continue,
+            };
+
+            let latest = Self::get_latest(session.clone(), base.host_key.clone(), stripe).await?;
+        }
+
         unimplemented!()
     }
 
