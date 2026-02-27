@@ -113,6 +113,7 @@ impl Signal for HostStatsStripe {
         record: Record,
     ) -> Result<Vec<Self>, AppError> {
         const N_STRIPES: i8 = 16;
+        let mut results = vec![];
         let host_key = base.host_key.clone();
         let stripe = ((xxh3_128(&host_key) as u64) % (N_STRIPES as u64)) as i8;
 
@@ -126,7 +127,133 @@ impl Signal for HostStatsStripe {
                 None => continue,
             };
 
-            let latest = Self::get_latest(session.clone(), base.host_key.clone(), stripe).await?;
+            let prev = Self::get_latest(session.clone(), host_key.clone(), stripe).await?;
+            let tau_fast = 6.0 * 3600.0;
+            let tau_medium = 7.0 * 24.0 * 3600.0;
+
+            let latency_obs = resp
+                .request
+                .timestamp
+                .signed_duration_since(now)
+                .num_milliseconds()
+                .abs() as f64;
+
+            let latency_ms_ema = update_ema(
+                prev.latency_ms_ema,
+                prev.last_update_ts,
+                now,
+                latency_obs,
+                tau_fast,
+            );
+
+            let bytes_obs = resp
+                .response_headers
+                .get("content-length")
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.0);
+
+            let bytes_ema = update_ema(
+                prev.bytes_ema,
+                prev.last_update_ts,
+                now,
+                bytes_obs,
+                tau_fast,
+            );
+
+            let status = resp.status.unwrap_or(0);
+
+            let http2xx_ema = update_ema(
+                prev.http2xx_ema,
+                prev.last_update_ts,
+                now,
+                if (200..300).contains(&status) {
+                    1.0
+                } else {
+                    0.0
+                },
+                tau_medium,
+            );
+
+            let http3xx_ema = update_ema(
+                prev.http3xx_ema,
+                prev.last_update_ts,
+                now,
+                if (300..400).contains(&status) {
+                    1.0
+                } else {
+                    0.0
+                },
+                tau_medium,
+            );
+
+            let http4xx_ema = update_ema(
+                prev.http4xx_ema,
+                prev.last_update_ts,
+                now,
+                if (400..500).contains(&status) {
+                    1.0
+                } else {
+                    0.0
+                },
+                tau_medium,
+            );
+
+            let http5xx_ema = update_ema(
+                prev.http5xx_ema,
+                prev.last_update_ts,
+                now,
+                if (500..600).contains(&status) {
+                    1.0
+                } else {
+                    0.0
+                },
+                tau_medium,
+            );
+
+            let http429_ema = update_ema(
+                prev.http429_ema,
+                prev.last_update_ts,
+                now,
+                if status == 429 { 1.0 } else { 0.0 },
+                tau_medium,
+            );
+
+            let timeout_ema = update_ema(
+                prev.timeout_ema,
+                prev.last_update_ts,
+                now,
+                if resp.error.is_some() { 1.0 } else { 0.0 },
+                tau_medium,
+            );
+
+            let redirect_ema = update_ema(
+                prev.redirect_ema,
+                prev.last_update_ts,
+                now,
+                if (300..400).contains(&status) {
+                    1.0
+                } else {
+                    0.0
+                },
+                tau_medium,
+            );
+
+            results.push(HostStatsStripe {
+                host_key: host_key.clone(),
+                stripe,
+                last_update_ts: now,
+                latency_ms_ema,
+                bytes_ema,
+                http2xx_ema,
+                http3xx_ema,
+                http4xx_ema,
+                http5xx_ema,
+                http429_ema,
+                timeout_ema,
+                dup_outlink_ema: prev.dup_outlink_ema,
+                novel_outlink_ema: prev.novel_outlink_ema,
+                redirect_ema,
+            });
         }
 
         unimplemented!()
