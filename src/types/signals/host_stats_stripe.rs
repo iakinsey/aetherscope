@@ -146,11 +146,17 @@ impl Signal for HostStatsStripe {
                 tau_fast,
             );
 
-            let bytes_obs = resp
+            let bytes_obs = if let Some(v) = resp
                 .response_headers
                 .get("content-length")
                 .and_then(|v| v.parse::<f64>().ok())
-                .unwrap_or(0.0);
+            {
+                v
+            } else if let Some(key) = &resp.key {
+                object_store.get_size(key).await? as f64
+            } else {
+                0.0
+            };
 
             let bytes_ema = update_ema(
                 prev.bytes_ema,
@@ -256,7 +262,7 @@ impl Signal for HostStatsStripe {
             });
         }
 
-        unimplemented!()
+        Ok(results)
     }
 
     fn bind_values(&self) -> QueryValues {
