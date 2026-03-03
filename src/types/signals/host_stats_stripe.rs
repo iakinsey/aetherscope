@@ -69,6 +69,65 @@ impl HostStatsStripe {
         host_key: Vec<u8>,
         stripe: i8,
     ) -> Result<Self, AppError> {
+        const Q: &str = r#"
+            SELECT 
+                host_key,
+                stripe,
+                last_update_ts,
+                latency_ms_ema,
+                bytes_ema,
+                http2xx_ema,
+                http3xx_ema,
+                http4xx_ema,
+                http5xx_ema,
+                http429_ema,
+                timeout_ema,
+                dup_outlink_ema,
+                novel_outlink_ema,
+                redirect_ema
+            FROM host_stats_stripe
+            WHERE host_key = ?
+            AND stripe = ?; 
+        "#;
+
+        let prepared = session.prepare(Q).await?;
+        let result = session
+            .exec_with_values(&prepared, query_values!(host_key.clone(), stripe.clone()))
+            .await?;
+        let row = match result.response_body()?.into_rows() {
+            Some(mut rows) if !rows.is_empty() => rows.remove(0),
+            _ => {
+                return Ok(Self {
+                    host_key,
+                    stripe,
+                    last_update_ts: Utc::now(),
+                    latency_ms_ema: 0.0,
+                    bytes_ema: 0.0,
+                    http2xx_ema: 0.0,
+                    http3xx_ema: 0.0,
+                    http4xx_ema: 0.0,
+                    http5xx_ema: 0.0,
+                    http429_ema: 0.0,
+                    timeout_ema: 0.0,
+                    dup_outlink_ema: 0.0,
+                    novel_outlink_ema: 0.0,
+                    redirect_ema: 0.0,
+                });
+            }
+        };
+
+
+        let last_update_ts: Option<DateTime<Utc>> = row.get_by_name("last_update_ts")?;
+        let soft404_ema: Option<f64> = row.get_by_name("soft404_ema")?;
+
+
+        Ok(Self {
+            host_key,
+            stripe,
+            last_update_ts: last_update_ts.unwrap_or_else(Utc::now),
+
+        })
+
         unimplemented!()
     }
 }
