@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use xxhash_rust::xxh3::xxh3_128;
@@ -116,19 +117,35 @@ impl HostStatsStripe {
             }
         };
 
-
         let last_update_ts: Option<DateTime<Utc>> = row.get_by_name("last_update_ts")?;
-        let soft404_ema: Option<f64> = row.get_by_name("soft404_ema")?;
-
+        let latency_ms_ema: Option<f64> = row.get_by_name("latency_ms_ema")?;
+        let bytes_ema: Option<f64> = row.get_by_name("bytes_ema")?;
+        let http2xx_ema: Option<f64> = row.get_by_name("http2xx_ema")?;
+        let http3xx_ema: Option<f64> = row.get_by_name("http3xx_ema")?;
+        let http4xx_ema: Option<f64> = row.get_by_name("http4xx_ema")?;
+        let http5xx_ema: Option<f64> = row.get_by_name("http5xx_ema")?;
+        let http429_ema: Option<f64> = row.get_by_name("http429_ema")?;
+        let timeout_ema: Option<f64> = row.get_by_name("timeout_ema")?;
+        let dup_outlink_ema: Option<f64> = row.get_by_name("dup_outlink_ema")?;
+        let novel_outlink_ema: Option<f64> = row.get_by_name("novel_outlink_ema")?;
+        let redirect_ema: Option<f64> = row.get_by_name("redirect_ema")?;
 
         Ok(Self {
             host_key,
             stripe,
             last_update_ts: last_update_ts.unwrap_or_else(Utc::now),
-
+            latency_ms_ema: latency_ms_ema.unwrap_or(0.0),
+            bytes_ema: bytes_ema.unwrap_or(0.0),
+            http2xx_ema: http2xx_ema.unwrap_or(0.0),
+            http3xx_ema: http3xx_ema.unwrap_or(0.0),
+            http4xx_ema: http4xx_ema.unwrap_or(0.0),
+            http5xx_ema: http5xx_ema.unwrap_or(0.0),
+            http429_ema: http429_ema.unwrap_or(0.0),
+            timeout_ema: timeout_ema.unwrap_or(0.0),
+            dup_outlink_ema: dup_outlink_ema.unwrap_or(0.0),
+            novel_outlink_ema: novel_outlink_ema.unwrap_or(0.0),
+            redirect_ema: redirect_ema.unwrap_or(0.0),
         })
-
-        unimplemented!()
     }
 }
 
