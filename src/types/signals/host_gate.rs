@@ -4,16 +4,16 @@ use std::sync::Arc;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
-use crate::types::{
-    error::AppError,
-    structs::{
-        record::{Record, RecordMetadata},
-        signal_base::SignalBase,
+use crate::{
+    types::{
+        error::AppError,
+        structs::{
+            record::{Record, RecordMetadata},
+            signal_base::SignalBase,
+        },
+        traits::{object_store::ObjectStore, signal::Signal},
     },
-    traits::{
-        object_store::ObjectStore,
-        signal::{DbSession, Signal},
-    },
+    utils::cassandra::DbSession,
 };
 
 // Per-host politeness and scheduling gate.

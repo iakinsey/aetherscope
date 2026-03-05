@@ -9,13 +9,13 @@ use url::Url;
 use crate::types::structs::metadata::http_response::HttpResponse;
 use crate::types::structs::signal_base::SignalBase;
 use crate::types::traits::object_store::ObjectStore;
-use crate::utils::cassandra::get_fp_minhash;
+use crate::utils::cassandra::{DbSession, get_fp_minhash};
 use crate::utils::web::extract_page_state_details;
 use crate::{
     types::{
         error::AppError,
         structs::record::{Record, RecordMetadata},
-        traits::signal::{DbSession, Signal},
+        traits::signal::Signal,
     },
     utils::web::{extract_host, extract_site},
 };

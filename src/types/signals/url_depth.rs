@@ -4,13 +4,13 @@ use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use xxhrs::XXH3_128;
 
-use crate::types::{
-    error::AppError,
-    structs::{record::Record, signal_base::SignalBase},
-    traits::{
-        object_store::ObjectStore,
-        signal::{DbSession, Signal},
+use crate::{
+    types::{
+        error::AppError,
+        structs::{record::Record, signal_base::SignalBase},
+        traits::{object_store::ObjectStore, signal::Signal},
     },
+    utils::cassandra::DbSession,
 };
 
 // Discovery depth metadata for a URL.

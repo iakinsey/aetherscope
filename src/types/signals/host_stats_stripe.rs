@@ -11,11 +11,9 @@ use crate::types::{
         record::{Record, RecordMetadata},
         signal_base::SignalBase,
     },
-    traits::{
-        object_store::ObjectStore,
-        signal::{DbSession, Signal},
-    },
+    traits::{object_store::ObjectStore, signal::Signal},
 };
+use crate::utils::cassandra::DbSession;
 
 fn update_ema(
     prev: f64,

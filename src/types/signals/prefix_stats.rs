@@ -4,6 +4,7 @@ use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
+use crate::utils::cassandra::DbSession;
 use crate::{
     types::{
         error::AppError,
@@ -11,10 +12,7 @@ use crate::{
             record::{Record, RecordMetadata},
             signal_base::SignalBase,
         },
-        traits::{
-            object_store::ObjectStore,
-            signal::{DbSession, Signal},
-        },
+        traits::{object_store::ObjectStore, signal::Signal},
     },
     utils::{
         cassandra::get_fp_minhash,

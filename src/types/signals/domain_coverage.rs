@@ -11,11 +11,9 @@ use crate::types::structs::record::RecordMetadata;
 use crate::types::{
     error::AppError,
     structs::{record::Record, signal_base::SignalBase},
-    traits::{
-        object_store::ObjectStore,
-        signal::{DbSession, Signal},
-    },
+    traits::{object_store::ObjectStore, signal::Signal},
 };
+use crate::utils::cassandra::DbSession;
 
 // Approximate coverage tracking per site (eTLD+1 or IP).
 // Uses sketches to estimate discovered vs fetched URLs

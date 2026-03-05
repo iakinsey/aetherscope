@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use url::Url;
 use xxhrs::XXH3_128;
 
+use crate::utils::cassandra::DbSession;
 use crate::{
     types::{
         error::AppError,
@@ -13,10 +14,7 @@ use crate::{
             record::{Record, RecordMetadata},
             signal_base::SignalBase,
         },
-        traits::{
-            object_store::ObjectStore,
-            signal::{DbSession, Signal},
-        },
+        traits::{object_store::ObjectStore, signal::Signal},
     },
     utils::web::extract_site,
 };

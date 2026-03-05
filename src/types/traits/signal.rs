@@ -1,23 +1,15 @@
 use std::sync::Arc;
 
-use cdrs_tokio::{
-    cluster::{TcpConnectionManager, session::Session},
-    load_balancing::RoundRobinLoadBalancingStrategy,
-    query::{BatchQueryBuilder, QueryValues},
-    transport::TransportTcp,
-};
+use cdrs_tokio::query::{BatchQueryBuilder, QueryValues};
 
-use crate::types::{
-    error::AppError,
-    structs::{record::Record, signal_base::SignalBase},
-    traits::object_store::ObjectStore,
+use crate::{
+    types::{
+        error::AppError,
+        structs::{record::Record, signal_base::SignalBase},
+        traits::object_store::ObjectStore,
+    },
+    utils::cassandra::DbSession,
 };
-
-pub type DbSession = Session<
-    TransportTcp,
-    TcpConnectionManager,
-    RoundRobinLoadBalancingStrategy<TransportTcp, TcpConnectionManager>,
->;
 
 pub trait Signal: Sized + Send + Sync {
     const CREATE_TABLE_QUERY: &'static str;

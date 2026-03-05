@@ -1,6 +1,17 @@
 use crate::types::error::AppError;
 use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::types::prelude::Row;
+use cdrs_tokio::{
+    cluster::{TcpConnectionManager, session::Session},
+    load_balancing::RoundRobinLoadBalancingStrategy,
+    transport::TransportTcp,
+};
+
+pub type DbSession = Session<
+    TransportTcp,
+    TcpConnectionManager,
+    RoundRobinLoadBalancingStrategy<TransportTcp, TcpConnectionManager>,
+>;
 
 pub fn get_fp_minhash(row: &Row, name: &str) -> Result<Option<Vec<u64>>, AppError> {
     Ok({
