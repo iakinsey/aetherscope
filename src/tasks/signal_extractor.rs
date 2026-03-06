@@ -9,14 +9,15 @@ use crate::{
         structs::{
             metadata::execution_context::ExecutionContext, record::Record, signal_base::SignalBase,
         },
-        traits::{object_store::ObjectStore, signal::Signal, task::Task},
+        traits::{object_store::ObjectStore, task::Task},
     },
-    utils::dependencies::dependencies,
+    utils::{cassandra::DbSession, dependencies::dependencies},
 };
 
 pub struct SignalExtractor<'a> {
     config: &'a SignalExtractorConfig<'a>,
     object_store: Arc<dyn ObjectStore>,
+    db_session: Arc<DbSession>,
 }
 
 impl<'a> SignalExtractor<'a> {
@@ -26,9 +27,15 @@ impl<'a> SignalExtractor<'a> {
             .await
             .get_object_store(&config.object_store)?;
 
+        let db_session = dependencies()
+            .lock()
+            .await
+            .get_db_session(&config.db_session)?;
+
         Ok(Self {
             config,
             object_store,
+            db_session,
         })
     }
 }
