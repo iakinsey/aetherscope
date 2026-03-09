@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use cdrs_tokio::query::{BatchQueryBuilder, QueryValues};
 
 use crate::{
@@ -11,21 +12,32 @@ use crate::{
     utils::cassandra::DbSession,
 };
 
-pub trait Signal: Sized + Send + Sync {
-    const CREATE_TABLE_QUERY: &'static str;
-    const UPSERT_QUERY: &'static str;
+#[async_trait]
+pub trait Signal: Send + Sync {
+    fn create_table_query() -> &'static str
+    where
+        Self: Sized;
+
+    fn upsert_query() -> &'static str
+    where
+        Self: Sized;
 
     async fn from_record(
         session: Arc<DbSession>,
         object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
-    ) -> Result<Vec<Self>, AppError>;
+    ) -> Result<Vec<Box<dyn Signal>>, AppError>
+    where
+        Self: Sized;
 
     fn bind_values(&self) -> QueryValues;
 
-    async fn create_table(session: Arc<DbSession>) -> Result<(), AppError> {
-        session.query(Self::CREATE_TABLE_QUERY).await?;
+    async fn create_table(session: Arc<DbSession>) -> Result<(), AppError>
+    where
+        Self: Sized,
+    {
+        session.query(Self::create_table_query()).await?;
         Ok(())
     }
 
@@ -33,12 +45,15 @@ pub trait Signal: Sized + Send + Sync {
         session: Arc<DbSession>,
         rows: &[Self],
         batch_size: usize,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), AppError>
+    where
+        Self: Sized,
+    {
         if rows.is_empty() {
             return Ok(());
         }
 
-        let prepared = session.prepare(Self::UPSERT_QUERY).await?;
+        let prepared = session.prepare(Self::upsert_query()).await?;
 
         for chunk in rows.chunks(batch_size.max(1)) {
             let mut b = BatchQueryBuilder::new();

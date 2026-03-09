@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
@@ -39,6 +40,7 @@ pub struct DomainAuthorityPrior {
     pub updated_ts: DateTime<Utc>,
 }
 
+// TODO
 impl DomainAuthorityPrior {
     pub async fn get_latest(
         session: Arc<DbSession>,
@@ -48,27 +50,41 @@ impl DomainAuthorityPrior {
     }
 }
 
+#[async_trait]
 impl Signal for DomainAuthorityPrior {
-    const CREATE_TABLE_QUERY: &'static str = r#"
+    fn create_table_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         CREATE TABLE IF NOT EXISTS domain_authority_prior (
             domain_key  blob PRIMARY KEY,
             authority   double,
             updated_ts  timestamp
         )
-    "#;
+    "#
+    }
 
-    const UPSERT_QUERY: &'static str = r#"
+    fn upsert_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         INSERT INTO domain_authority_prior (
             domain_key, authority, updated_ts
         ) VALUES (?, ?, ?)
-    "#;
+    "#
+    }
 
     async fn from_record(
         session: Arc<DbSession>,
-        object_store: Arc<dyn ObjectStore>,
+        _object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
-    ) -> Result<Vec<Self>, AppError> {
+    ) -> Result<Vec<Box<dyn Signal>>, AppError>
+    where
+        Self: Sized,
+    {
         let domain_key = base.site_key;
         let mut updated_ts: Option<DateTime<Utc>> = None;
         let mut success = false;
@@ -98,11 +114,11 @@ impl Signal for DomainAuthorityPrior {
             90.0 * 24.0 * 3600.0,
         );
 
-        Ok(vec![Self {
+        Ok(vec![Box::new(Self {
             domain_key,
             authority,
             updated_ts,
-        }])
+        })])
     }
 
     fn bind_values(&self) -> QueryValues {
