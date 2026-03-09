@@ -6,10 +6,15 @@ use crate::{
     types::{
         configs::tasks::signal_extractor_config::SignalExtractorConfig,
         error::AppError,
+        signals::{
+            domain_authority_prior::DomainAuthorityPrior, domain_coverage::DomainCoverage,
+            host_gate::HostGate, host_stats_stripe::HostStatsStripe, inlink_agg::InlinkAgg,
+            prefix_stats::PrefixStats, url_depth::UrlDepth, url_state::UrlState,
+        },
         structs::{
             metadata::execution_context::ExecutionContext, record::Record, signal_base::SignalBase,
         },
-        traits::{object_store::ObjectStore, task::Task},
+        traits::{object_store::ObjectStore, signal::Signal, task::Task},
     },
     utils::{cassandra::DbSession, dependencies::dependencies},
 };
@@ -40,11 +45,43 @@ impl<'a> SignalExtractor<'a> {
     }
 }
 
+macro_rules! collect_signals {
+    ($session:expr, $store:expr, $base:expr, $record:expr, [$($t:ty),* $(,)?]) => {{
+        let mut out: Vec<Box<dyn Signal>> = Vec::new();
+        $(
+            out.extend(
+                <$t as Signal>::from_record(
+                    $session.clone(),
+                    $store.clone(),
+                    $base.clone(),
+                    $record.clone(),
+                ).await?
+            );
+        )*
+        out
+    }};
+}
+
 #[async_trait]
 impl<'a> Task for SignalExtractor<'a> {
     async fn on_message(&self, ctx: ExecutionContext, message: Record) -> Result<Record, AppError> {
-        //let mut signals: Vec<dyn Signal> = vec![];
         let signal_base = SignalBase::new(&message)?;
+        let signals = collect_signals!(
+            self.db_session,
+            self.object_store,
+            signal_base,
+            message,
+            [
+                DomainAuthorityPrior,
+                DomainCoverage,
+                HostGate,
+                HostStatsStripe,
+                InlinkAgg,
+                PrefixStats,
+                UrlDepth,
+                UrlState
+            ]
+        );
 
         unimplemented!()
     }

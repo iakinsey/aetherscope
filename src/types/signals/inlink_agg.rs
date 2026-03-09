@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
@@ -98,8 +99,13 @@ impl InlinkAgg {
     }
 }
 
+#[async_trait]
 impl Signal for InlinkAgg {
-    const CREATE_TABLE_QUERY: &'static str = r#"
+    fn create_table_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         CREATE TABLE IF NOT EXISTS inlink_agg (
             target_key     blob,
             kind           tinyint,
@@ -108,22 +114,29 @@ impl Signal for InlinkAgg {
             last_update_ts timestamp,
             PRIMARY KEY ((target_key), kind)
         )
-    "#;
-
-    const UPSERT_QUERY: &'static str = r#"
+    "#
+    }
+    fn upsert_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         INSERT INTO inlink_agg (
             target_key, kind,
             inlinks_ema, w_inlinks_ema,
             last_update_ts
         ) VALUES (?, ?, ?, ?, ?)
-    "#;
-
+    "#
+    }
     async fn from_record(
         session: Arc<DbSession>,
-        _object_store: Arc<dyn ObjectStore>,
-        _base: SignalBase,
+        object_store: Arc<dyn ObjectStore>,
+        base: SignalBase,
         record: Record,
-    ) -> Result<Vec<Self>, AppError> {
+    ) -> Result<Vec<Box<dyn Signal>>, AppError>
+    where
+        Self: Sized,
+    {
         let mut now_ts: Option<DateTime<Utc>> = None;
         let mut out_uris: Vec<String> = Vec::new();
 
@@ -148,7 +161,7 @@ impl Signal for InlinkAgg {
 
         let tau = 30.0 * 24.0 * 3600.0;
 
-        let mut rows = Vec::new();
+        let mut rows: Vec<Box<dyn Signal>> = Vec::new();
 
         for uri in out_uris {
             let url = match Url::parse(&uri) {
@@ -175,13 +188,13 @@ impl Signal for InlinkAgg {
                 let w_inlinks_ema =
                     update_ema(prev.w_inlinks_ema, prev.last_update_ts, now, 1.0, tau);
 
-                rows.push(Self {
+                rows.push(Box::new(Self {
                     target_key,
                     kind,
                     inlinks_ema,
                     w_inlinks_ema,
                     last_update_ts: now,
-                });
+                }));
             }
         }
 

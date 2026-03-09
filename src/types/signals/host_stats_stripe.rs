@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
@@ -147,8 +148,13 @@ impl HostStatsStripe {
     }
 }
 
+#[async_trait]
 impl Signal for HostStatsStripe {
-    const CREATE_TABLE_QUERY: &'static str = r#"
+    fn create_table_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         CREATE TABLE IF NOT EXISTS host_stats_stripe (
             host_key          blob,
             stripe            tinyint,
@@ -166,9 +172,13 @@ impl Signal for HostStatsStripe {
             redirect_ema      double,
             PRIMARY KEY ((host_key), stripe)
         )
-    "#;
-
-    const UPSERT_QUERY: &'static str = r#"
+    "#
+    }
+    fn upsert_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         INSERT INTO host_stats_stripe (
             host_key, stripe,
             last_update_ts,
@@ -178,16 +188,19 @@ impl Signal for HostStatsStripe {
             dup_outlink_ema, novel_outlink_ema,
             redirect_ema
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    "#;
-
+    "#
+    }
     async fn from_record(
         session: Arc<DbSession>,
         object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
-    ) -> Result<Vec<Self>, AppError> {
+    ) -> Result<Vec<Box<dyn Signal>>, AppError>
+    where
+        Self: Sized,
+    {
         const N_STRIPES: i8 = 16;
-        let mut results = vec![];
+        let mut results: Vec<Box<dyn Signal>> = Vec::new();
         let host_key = base.host_key.clone();
         let stripe = ((xxh3_128(&host_key) as u64) % (N_STRIPES as u64)) as i8;
 
@@ -318,7 +331,7 @@ impl Signal for HostStatsStripe {
                 tau_medium,
             );
 
-            results.push(HostStatsStripe {
+            results.push(Box::new(HostStatsStripe {
                 host_key: host_key.clone(),
                 stripe,
                 last_update_ts: now,
@@ -333,7 +346,7 @@ impl Signal for HostStatsStripe {
                 dup_outlink_ema: prev.dup_outlink_ema,
                 novel_outlink_ema: prev.novel_outlink_ema,
                 redirect_ema,
-            });
+            }));
         }
 
         Ok(results)

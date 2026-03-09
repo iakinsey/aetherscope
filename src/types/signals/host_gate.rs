@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use cdrs_tokio::types::IntoRustByName;
 use std::sync::Arc;
 
@@ -73,29 +74,41 @@ impl HostGate {
     }
 }
 
+#[async_trait]
 impl Signal for HostGate {
-    const CREATE_TABLE_QUERY: &'static str = r#"
+    fn create_table_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         CREATE TABLE IF NOT EXISTS host_gate (
             host_key         blob PRIMARY KEY,
             next_allowed_ts  timestamp,
             lease_until_ts   timestamp,
             lease_owner      text
         )
-    "#;
-
-    const UPSERT_QUERY: &'static str = r#"
+    "#
+    }
+    fn upsert_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         INSERT INTO host_gate (
             host_key, next_allowed_ts, lease_until_ts, lease_owner
         ) VALUES (?, ?, ?, ?)
-    "#;
-
+    "#
+    }
     async fn from_record(
         _session: Arc<DbSession>,
         _object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
-    ) -> Result<Vec<Self>, AppError> {
-        let mut results = vec![];
+    ) -> Result<Vec<Box<dyn Signal>>, AppError>
+    where
+        Self: Sized,
+    {
+        let mut results: Vec<Box<dyn Signal>> = Vec::new();
 
         for m in &record.metadata {
             if let RecordMetadata::HttpResponse(resp) = m {
@@ -132,7 +145,7 @@ impl Signal for HostGate {
                     lease_owner: Some(resp.request.worker_id.clone()),
                 };
 
-                results.push(row);
+                results.push(Box::new(row));
             }
         }
 

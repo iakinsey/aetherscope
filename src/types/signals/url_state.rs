@@ -1,5 +1,6 @@
 use std::{str::FromStr, sync::Arc};
 
+use async_trait::async_trait;
 use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
@@ -220,8 +221,13 @@ impl UrlState {
     }
 }
 
+#[async_trait]
 impl Signal for UrlState {
-    const CREATE_TABLE_QUERY: &'static str = r#"
+    fn create_table_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         CREATE TABLE IF NOT EXISTS url_state (
             url_key         blob PRIMARY KEY,
             host_key        blob,
@@ -237,9 +243,14 @@ impl Signal for UrlState {
             latency_ms_ema  double,
             bytes_ema       double
         )
-    "#;
+    "#
+    }
 
-    const UPSERT_QUERY: &'static str = r#"
+    fn upsert_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         INSERT INTO url_state (
             url_key,
             host_key,
@@ -255,14 +266,17 @@ impl Signal for UrlState {
             latency_ms_ema,
             bytes_ema
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    "#;
-
+    "#
+    }
     async fn from_record(
         session: Arc<DbSession>,
         object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
-    ) -> Result<Vec<Self>, AppError> {
+    ) -> Result<Vec<Box<dyn Signal>>, AppError>
+    where
+        Self: Sized,
+    {
         let url = Url::from_str(&record.uri)?;
         let site = extract_site(&url)?;
         let host = extract_host(&url)?;
@@ -273,7 +287,7 @@ impl Signal for UrlState {
             base.site_key.clone(),
         )
         .await?;
-        let mut results = vec![];
+        let mut results: Vec<Box<dyn Signal>> = Vec::new();
 
         for m in record.metadata {
             let RecordMetadata::HttpResponse(resp) = m else {
@@ -363,7 +377,7 @@ impl Signal for UrlState {
                 None => latest.bytes_ema,
             };
 
-            results.push(Self {
+            results.push(Box::new(Self {
                 url_key: base.url_key.clone(),
                 host_key: base.host_key.clone(),
                 site_key: base.site_key.clone(),
@@ -377,7 +391,7 @@ impl Signal for UrlState {
                 thin_ema,
                 latency_ms_ema,
                 bytes_ema,
-            })
+            }))
         }
 
         Ok(results)

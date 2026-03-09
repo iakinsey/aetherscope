@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use bincode::{deserialize, serialize};
 use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::types::blob::Blob;
@@ -76,28 +77,40 @@ impl DomainCoverage {
     }
 }
 
+#[async_trait]
 impl Signal for DomainCoverage {
-    const CREATE_TABLE_QUERY: &'static str = r#"
+    fn create_table_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         CREATE TABLE IF NOT EXISTS domain_coverage (
             domain_key      blob PRIMARY KEY,
             hll_discovered  blob,
             hll_fetched     blob,
             last_update_ts  timestamp
         )
-    "#;
-
-    const UPSERT_QUERY: &'static str = r#"
+    "#
+    }
+    fn upsert_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         INSERT INTO domain_coverage (
             domain_key, hll_discovered, hll_fetched, last_update_ts
         ) VALUES (?, ?, ?, ?)
-    "#;
-
+    "#
+    }
     async fn from_record(
         session: Arc<DbSession>,
         _object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
-    ) -> Result<Vec<Self>, AppError> {
+    ) -> Result<Vec<Box<dyn Signal>>, AppError>
+    where
+        Self: Sized,
+    {
         let domain_key = base.site_key;
         let latest = Self::get_latest(session, domain_key.clone()).await?;
         let mut hll_discovered: HyperLogLog<String> = deserialize(&latest.hll_discovered)?;
@@ -116,12 +129,12 @@ impl Signal for DomainCoverage {
             }
         }
 
-        Ok(vec![Self {
+        Ok(vec![Box::new(Self {
             domain_key,
             hll_discovered: serialize(&hll_discovered)?,
             hll_fetched: serialize(&hll_fetched)?,
             last_update_ts,
-        }])
+        })])
     }
 
     fn bind_values(&self) -> QueryValues {

@@ -8,6 +8,7 @@ use crate::{
     utils::web::{extract_host, extract_site, normalize_prefix},
 };
 
+#[derive(Clone)]
 pub struct SignalBase {
     pub url: Url,
     pub url_key: Vec<u8>,

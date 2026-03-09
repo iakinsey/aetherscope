@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use xxhrs::XXH3_128;
@@ -25,34 +26,47 @@ pub struct UrlDepth {
     pub discovered_ts: DateTime<Utc>,
 }
 
+#[async_trait]
 impl Signal for UrlDepth {
-    const CREATE_TABLE_QUERY: &'static str = r#"
+    fn create_table_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         CREATE TABLE IF NOT EXISTS url_depth (
             url_key        blob PRIMARY KEY,
             depth          int,
             discovered_ts  timestamp
         )
-    "#;
-
-    const UPSERT_QUERY: &'static str = r#"
+    "#
+    }
+    fn upsert_query() -> &'static str
+    where
+        Self: Sized,
+    {
+        r#"
         INSERT INTO url_depth (
             url_key, depth, discovered_ts
         ) VALUES (?, ?, ?)
-    "#;
+    "#
+    }
 
     async fn from_record(
         session: Arc<DbSession>,
         object_store: Arc<dyn ObjectStore>,
         base: SignalBase,
         record: Record,
-    ) -> Result<Vec<Self>, AppError> {
+    ) -> Result<Vec<Box<dyn Signal>>, AppError>
+    where
+        Self: Sized,
+    {
         let url_key = XXH3_128::hash(record.uri.as_bytes()).to_be_bytes().to_vec();
 
-        Ok(vec![Self {
+        Ok(vec![Box::new(Self {
             url_key,
             depth: record.depth,
             discovered_ts: record.discovered,
-        }])
+        })])
     }
 
     fn bind_values(&self) -> QueryValues {
