@@ -14,6 +14,10 @@ use crate::{
 
 #[async_trait]
 pub trait Signal: Send + Sync {
+    fn name() -> &'static str
+    where
+        Self: Sized;
+
     fn create_table_query() -> &'static str
     where
         Self: Sized;

@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 
-use crate::types::structs::metadata::{http_response::HttpResponse, uris::Uris};
+use crate::types::structs::metadata::{
+    http_response::HttpResponse, signals_extracted::SignalsExtracted, uris::Uris,
+};
 
 #[derive(Clone)]
 pub struct Record {
@@ -15,4 +17,5 @@ pub struct Record {
 pub enum RecordMetadata {
     HttpResponse(HttpResponse),
     Uris(Uris),
+    SignalsExtracted(SignalsExtracted),
 }

@@ -150,6 +150,13 @@ impl HostStatsStripe {
 
 #[async_trait]
 impl Signal for HostStatsStripe {
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        "host_stats_stripe"
+    }
+
     fn create_table_query() -> &'static str
     where
         Self: Sized,

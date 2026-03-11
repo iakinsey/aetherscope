@@ -101,6 +101,13 @@ impl InlinkAgg {
 
 #[async_trait]
 impl Signal for InlinkAgg {
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        "inlink_agg"
+    }
+
     fn create_table_query() -> &'static str
     where
         Self: Sized,

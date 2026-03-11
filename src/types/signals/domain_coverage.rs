@@ -79,6 +79,13 @@ impl DomainCoverage {
 
 #[async_trait]
 impl Signal for DomainCoverage {
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        "domain_coverage"
+    }
+
     fn create_table_query() -> &'static str
     where
         Self: Sized,

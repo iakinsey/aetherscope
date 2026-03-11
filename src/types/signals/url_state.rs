@@ -223,6 +223,13 @@ impl UrlState {
 
 #[async_trait]
 impl Signal for UrlState {
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        "url_state"
+    }
+
     fn create_table_query() -> &'static str
     where
         Self: Sized,

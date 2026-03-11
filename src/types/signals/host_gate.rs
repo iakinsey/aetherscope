@@ -76,6 +76,13 @@ impl HostGate {
 
 #[async_trait]
 impl Signal for HostGate {
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        "host_gate"
+    }
+
     fn create_table_query() -> &'static str
     where
         Self: Sized,

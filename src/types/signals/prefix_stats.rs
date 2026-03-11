@@ -168,6 +168,13 @@ impl PrefixStats {
 
 #[async_trait]
 impl Signal for PrefixStats {
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        "prefix_stats"
+    }
+
     fn create_table_query() -> &'static str
     where
         Self: Sized,

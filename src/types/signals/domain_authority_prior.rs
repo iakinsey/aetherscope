@@ -52,6 +52,13 @@ impl DomainAuthorityPrior {
 
 #[async_trait]
 impl Signal for DomainAuthorityPrior {
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        "domain_authority_prior"
+    }
+
     fn create_table_query() -> &'static str
     where
         Self: Sized,

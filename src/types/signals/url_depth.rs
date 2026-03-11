@@ -28,6 +28,13 @@ pub struct UrlDepth {
 
 #[async_trait]
 impl Signal for UrlDepth {
+    fn name() -> &'static str
+    where
+        Self: Sized,
+    {
+        "url_depth"
+    }
+
     fn create_table_query() -> &'static str
     where
         Self: Sized,
