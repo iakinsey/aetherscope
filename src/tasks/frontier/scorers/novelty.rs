@@ -2,7 +2,7 @@
 
 use crate::types::{
     configs::scorers::novelty_scorer_config::NoveltyScorerConfig, error::AppError,
-    traits::frontier_scorer::FrontierScorer,
+    structs::metadata::signals_extracted::ExtractedSignal, traits::frontier_scorer::FrontierScorer,
 };
 
 pub struct NoveltyScorer;
@@ -14,7 +14,7 @@ impl NoveltyScorer {
 }
 
 impl FrontierScorer for NoveltyScorer {
-    async fn score(self, uris: Vec<String>, origin: &str) -> Result<Vec<(String, i32)>, AppError> {
+    async fn score(self, signals: Vec<ExtractedSignal>) -> Result<f32, AppError> {
         unimplemented!()
     }
 }

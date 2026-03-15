@@ -2,7 +2,7 @@
 
 use crate::types::{
     configs::scorers::coverage_scorer_config::CoverageScorerConfig, error::AppError,
-    traits::frontier_scorer::FrontierScorer,
+    structs::metadata::signals_extracted::ExtractedSignal, traits::frontier_scorer::FrontierScorer,
 };
 
 pub struct CoverageScorer;
@@ -14,7 +14,7 @@ impl CoverageScorer {
 }
 
 impl FrontierScorer for CoverageScorer {
-    async fn score(self, uris: Vec<String>, origin: &str) -> Result<Vec<(String, i32)>, AppError> {
+    async fn score(self, signals: Vec<ExtractedSignal>) -> Result<f32, AppError> {
         unimplemented!()
     }
 }
