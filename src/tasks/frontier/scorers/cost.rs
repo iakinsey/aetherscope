@@ -2,7 +2,7 @@
 
 use crate::types::{
     configs::scorers::cost_scorer_config::CostScorerConfig, error::AppError,
-    traits::frontier_scorer::FrontierScorer,
+    structs::metadata::signals_extracted::ExtractedSignal, traits::frontier_scorer::FrontierScorer,
 };
 
 pub struct CostScorer;
@@ -14,7 +14,7 @@ impl CostScorer {
 }
 
 impl FrontierScorer for CostScorer {
-    async fn score(self, uris: Vec<String>, origin: &str) -> Result<Vec<(String, i32)>, AppError> {
+    async fn score(self, signals: Vec<ExtractedSignal>) -> Result<f32, AppError> {
         unimplemented!()
     }
 }

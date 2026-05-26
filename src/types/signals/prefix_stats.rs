@@ -5,6 +5,7 @@ use cdrs_tokio::types::IntoRustByName;
 use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 
+use crate::types::structs::metadata::signals_extracted::ExtractedSignalValue;
 use crate::utils::cassandra::DbSession;
 use crate::{
     types::{
@@ -308,5 +309,9 @@ impl Signal for PrefixStats {
             self.near_dup_ema,
             self.variance_ema
         )
+    }
+
+    fn to_extracted_value(&self) -> ExtractedSignalValue {
+        ExtractedSignalValue::PrefixStats(self.clone())
     }
 }

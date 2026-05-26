@@ -15,6 +15,7 @@ impl FreshnessScorer {
 
 impl FrontierScorer for FreshnessScorer {
     async fn score(self, signals: Vec<ExtractedSignal>) -> Result<f32, AppError> {
+        // TODO add a struct that retrieves the latest signal
         unimplemented!()
     }
 }

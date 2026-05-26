@@ -51,6 +51,7 @@ impl<'a> SignalExtractor<'a> {
     }
 }
 
+/*
 macro_rules! collect_upserts {
     ($session:expr, $store:expr, $base:expr, $record:expr, [$($t:ty),* $(,)?]) => {{
         let mut out: Vec<(String, String, Vec<QueryValues>)> = Vec::new();
@@ -67,6 +68,7 @@ macro_rules! collect_upserts {
                 .map(|s| s.bind_values())
                 .collect();
 
+            // TODO this needs to return a signal
             if !values.is_empty() {
                 out.push((
                     <$t as Signal>::name().to_string(),
@@ -75,6 +77,38 @@ macro_rules! collect_upserts {
                 ));
             }
         )*
+        out
+    }};
+}
+*/
+
+macro_rules! collect_upserts {
+    ($session:expr, $store:expr, $base:expr, $record:expr, [$($t:ty),* $(,)?]) => {{
+        let mut out: Vec<(String, String, Vec<Box<dyn Signal>>, Vec<QueryValues>)> = Vec::new();
+
+        $(
+            let signals = <$t as Signal>::from_record(
+                $session.clone(),
+                $store.clone(),
+                $base.clone(),
+                $record.clone(),
+            ).await?;
+
+            if !signals.is_empty() {
+                let values: Vec<QueryValues> = signals
+                    .iter()
+                    .map(|s| s.bind_values())
+                    .collect();
+
+                out.push((
+                    <$t as Signal>::name().to_string(),
+                    <$t as Signal>::upsert_query().to_string(),
+                    signals,
+                    values,
+                ));
+            }
+        )*
+
         out
     }};
 }
@@ -102,10 +136,10 @@ impl<'a> Task for SignalExtractor<'a> {
             ]
         );
 
-        for (name, query, rows) in signals {
+        for (name, query, signals, rows) in signals {
             let prepared = self.db_session.prepare(query).await?;
 
-            for row in rows {
+            for (signal, row) in signals.into_iter().zip(rows.into_iter()) {
                 let err = self
                     .db_session
                     .exec_with_values(&prepared, row)
@@ -116,6 +150,7 @@ impl<'a> Task for SignalExtractor<'a> {
                 signals_extracted.push(ExtractedSignal {
                     name: name.clone(),
                     error: err,
+                    value: signal.to_extracted_value(),
                 });
             }
         }

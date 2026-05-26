@@ -8,7 +8,10 @@ use xxhrs::XXH3_128;
 use crate::{
     types::{
         error::AppError,
-        structs::{record::Record, signal_base::SignalBase},
+        structs::{
+            metadata::signals_extracted::ExtractedSignalValue, record::Record,
+            signal_base::SignalBase,
+        },
         traits::{object_store::ObjectStore, signal::Signal},
     },
     utils::cassandra::DbSession,
@@ -82,5 +85,8 @@ impl Signal for UrlDepth {
             self.depth,
             self.discovered_ts.naive_utc()
         )
+    }
+    fn to_extracted_value(&self) -> ExtractedSignalValue {
+        ExtractedSignalValue::UrlDepth(self.clone())
     }
 }

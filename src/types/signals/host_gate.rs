@@ -9,6 +9,7 @@ use crate::{
     types::{
         error::AppError,
         structs::{
+            metadata::signals_extracted::ExtractedSignalValue,
             record::{Record, RecordMetadata},
             signal_base::SignalBase,
         },
@@ -166,5 +167,9 @@ impl Signal for HostGate {
             self.lease_until_ts.naive_utc(),
             self.lease_owner.clone()
         )
+    }
+
+    fn to_extracted_value(&self) -> ExtractedSignalValue {
+        ExtractedSignalValue::HostGate(self.clone())
     }
 }

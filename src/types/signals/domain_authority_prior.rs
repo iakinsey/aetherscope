@@ -8,6 +8,7 @@ use crate::{
     types::{
         error::AppError,
         structs::{
+            metadata::signals_extracted::ExtractedSignalValue,
             record::{Record, RecordMetadata},
             signal_base::SignalBase,
         },
@@ -134,5 +135,9 @@ impl Signal for DomainAuthorityPrior {
             self.authority,
             self.updated_ts.naive_utc()
         )
+    }
+
+    fn to_extracted_value(&self) -> ExtractedSignalValue {
+        ExtractedSignalValue::DomainAuthorityPrior(self.clone())
     }
 }

@@ -6,7 +6,10 @@ use cdrs_tokio::query::{BatchQueryBuilder, QueryValues};
 use crate::{
     types::{
         error::AppError,
-        structs::{record::Record, signal_base::SignalBase},
+        structs::{
+            metadata::signals_extracted::ExtractedSignalValue, record::Record,
+            signal_base::SignalBase,
+        },
         traits::object_store::ObjectStore,
     },
     utils::cassandra::DbSession,
@@ -36,6 +39,7 @@ pub trait Signal: Send + Sync {
         Self: Sized;
 
     fn bind_values(&self) -> QueryValues;
+    fn to_extracted_value(&self) -> ExtractedSignalValue;
 
     async fn create_table(session: Arc<DbSession>) -> Result<(), AppError>
     where

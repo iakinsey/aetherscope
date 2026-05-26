@@ -8,6 +8,7 @@ use httpdate::parse_http_date;
 use url::Url;
 
 use crate::types::structs::metadata::http_response::HttpResponse;
+use crate::types::structs::metadata::signals_extracted::ExtractedSignalValue;
 use crate::types::structs::signal_base::SignalBase;
 use crate::types::traits::object_store::ObjectStore;
 use crate::utils::cassandra::{DbSession, get_fp_minhash};
@@ -420,5 +421,9 @@ impl Signal for UrlState {
             self.latency_ms_ema,
             self.bytes_ema
         )
+    }
+
+    fn to_extracted_value(&self) -> ExtractedSignalValue {
+        ExtractedSignalValue::UrlState(self.clone())
     }
 }

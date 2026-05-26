@@ -8,6 +8,7 @@ use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use probabilistic_collections::hyperloglog::HyperLogLog;
 
+use crate::types::structs::metadata::signals_extracted::ExtractedSignalValue;
 use crate::types::structs::record::RecordMetadata;
 use crate::types::{
     error::AppError,
@@ -151,5 +152,9 @@ impl Signal for DomainCoverage {
             self.hll_fetched.clone(),
             self.last_update_ts.naive_utc()
         )
+    }
+
+    fn to_extracted_value(&self) -> ExtractedSignalValue {
+        ExtractedSignalValue::DomainCoverage(self.clone())
     }
 }

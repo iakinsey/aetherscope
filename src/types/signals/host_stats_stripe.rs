@@ -6,6 +6,7 @@ use cdrs_tokio::{query::QueryValues, query_values};
 use chrono::{DateTime, Utc};
 use xxhash_rust::xxh3::xxh3_128;
 
+use crate::types::structs::metadata::signals_extracted::ExtractedSignalValue;
 use crate::types::{
     error::AppError,
     structs::{
@@ -376,5 +377,9 @@ impl Signal for HostStatsStripe {
             self.novel_outlink_ema,
             self.redirect_ema
         )
+    }
+
+    fn to_extracted_value(&self) -> ExtractedSignalValue {
+        ExtractedSignalValue::HostStatsStripe(self.clone())
     }
 }

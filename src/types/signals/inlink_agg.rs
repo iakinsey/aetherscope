@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use url::Url;
 use xxhrs::XXH3_128;
 
+use crate::types::structs::metadata::signals_extracted::ExtractedSignalValue;
 use crate::utils::cassandra::DbSession;
 use crate::{
     types::{
@@ -216,5 +217,9 @@ impl Signal for InlinkAgg {
             self.w_inlinks_ema,
             self.last_update_ts.naive_utc()
         )
+    }
+
+    fn to_extracted_value(&self) -> ExtractedSignalValue {
+        ExtractedSignalValue::InlinkAgg(self.clone())
     }
 }
