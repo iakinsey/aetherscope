@@ -1,9 +1,11 @@
 // Cost (estimate latency from previous requests, how many errors occurred on the host prior, limit how many per host, robots.txt limits)
 
 use crate::types::{
-    configs::scorers::cost_scorer_config::CostScorerConfig, error::AppError,
+    configs::scorers::cost_scorer_config::CostScorerConfig,
+    error::AppError,
     signals::host_stats_stripe::HostStatsStripe,
-    structs::metadata::signals_extracted::ExtractedSignal, traits::frontier_scorer::FrontierScorer,
+    structs::metadata::{merged_host_cost::MergedHostCost, signals_extracted::ExtractedSignal},
+    traits::frontier_scorer::FrontierScorer,
 };
 
 pub struct CostScorer;
@@ -29,6 +31,8 @@ impl FrontierScorer for CostScorer {
         if host_stats.is_empty() {
             return Err(AppError::MissingSignal("HostStatsStripe".into()));
         }
+
+        let host = MergedHostCost::from_host_stats_stripes(&host_stats);
 
         unimplemented!()
     }
