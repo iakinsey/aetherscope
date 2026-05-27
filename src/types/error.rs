@@ -4,6 +4,8 @@ use thiserror::Error;
 pub enum AppError {
     #[error("{0}")]
     Generic(String),
+    #[error("expected {0} signal")]
+    MissingSignal(String),
     #[error("HTTP {0}: {1}")]
     FetchError(u16, String),
     #[error("{0}")]
