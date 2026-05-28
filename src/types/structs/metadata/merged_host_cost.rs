@@ -1,12 +1,12 @@
 use crate::types::signals::host_stats_stripe::HostStatsStripe;
 
 pub struct MergedHostCost {
-    latency_ms_ema: f64,
-    bytes_ema: f64,
-    http5xx_ema: f64,
-    http429_ema: f64,
-    timeout_ema: f64,
-    redirect_ema: f64,
+    pub latency_ms_ema: f64,
+    pub bytes_ema: f64,
+    pub http5xx_ema: f64,
+    pub http429_ema: f64,
+    pub timeout_ema: f64,
+    pub redirect_ema: f64,
 }
 
 impl MergedHostCost {
